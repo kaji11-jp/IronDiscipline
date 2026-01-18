@@ -53,6 +53,37 @@ discord:
   notification_channel_id: "YOUR_CHANNEL_ID"
 ```
 
+## コマンド一覧
+
+### 🌐 一般コマンド
+| コマンド | 説明 | 権限 |
+|---|---|---|
+| `/link [コード]` | Discordアカウント連携 | なし |
+| `/playtime [top]` | 勤務時間（プレイ時間）を表示 | `iron.playtime.view` |
+| `/radio <周波数>` | 無線チャンネルに参加・退出 | `iron.radio.use` |
+| `/radiobroadcast <msg>` | 無線で広域放送 | `iron.radio.use` |
+| `/warnings [player]` | 自分または他人の警告履歴を表示 | `iron.warn.view` |
+
+### 👮 規律・管理コマンド
+| コマンド | 説明 | 権限 |
+|---|---|---|
+| `/warn <player> <理由>` | 警告を与える（累積で自動処分） | `iron.warn.use` |
+| `/jail <player> [理由]` | プレイヤーを強制隔離 | `iron.jail.use` |
+| `/unjail <player>` | プレイヤーを釈放 | `iron.jail.use` |
+| `/grant <player> [秒]` | 下士官に発言権(PTS)を付与 | `iron.pts.grant` |
+| `/promote <player>` | 階級を昇進させる | `iron.rank.promote` |
+| `/demote <player>` | 階級を降格させる | `iron.rank.demote` |
+| `/division <set/remove>` | 部隊配属・除隊管理 | `iron.division.use` |
+| `/exam <start/end>` | 昇進試験の管理 | `iron.exam.use` |
+| `/killlog [player]` | PvP詳細ログの確認 | `iron.killlog.view` |
+| `/iron reload` | 設定リロード | `iron.admin` |
+
+### 🤖 Discord Bot コマンド（スラッシュコマンド）
+| コマンド | 説明 |
+|---|---|
+| `/donate` | 寄付情報の表示・進捗確認 |
+| `/setgoal` | 寄付目標の設定（管理者のみ） |
+
 ## ライセンス
 
 MIT License
