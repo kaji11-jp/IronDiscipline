@@ -1,0 +1,149 @@
+# ============================================
+#     IronDiscipline (鉄の規律) 設定ファイル
+# ============================================
+
+# 一般設定
+general:
+  # デバッグモード
+  debug: false
+  # 日本語メッセージを使用
+  locale: ja_JP
+
+# データベース設定
+database:
+  # タイプ: h2, sqlite, mysql
+  type: h2
+  # MySQLを使用する場合の設定
+  mysql:
+    host: localhost
+    port: 3306
+    database: irondiscipline
+    username: root
+    password: ""
+
+# 階級システム設定
+ranks:
+  # LuckPermsのメタデータキー名
+  meta_key: "military_rank"
+  # 階級定義 (下から上への順序)
+  list:
+    - id: PRIVATE
+      display: "&7[二等兵]"
+      weight: 10
+    - id: CORPORAL
+      display: "&7[一等兵]"
+      weight: 20
+    - id: SERGEANT
+      display: "&e[軍曹]"
+      weight: 30
+    - id: LIEUTENANT
+      display: "&6[少尉]"
+      weight: 40
+    - id: CAPTAIN
+      display: "&6[大尉]"
+      weight: 50
+    - id: MAJOR
+      display: "&c[少佐]"
+      weight: 60
+    - id: COLONEL
+      display: "&c[大佐]"
+      weight: 70
+    - id: COMMANDER
+      display: "&4&l[司令官]"
+      weight: 100
+
+# PTS (発言許可) システム設定
+pts:
+  # PTSが必要な最大階級重み (この重み以下はPTS必須)
+  require_below_weight: 25
+  # デフォルトの発言許可時間 (秒)
+  default_grant_duration: 60
+  # ダブルスニークでPTSリクエスト
+  sneak_request:
+    enabled: true
+    # ダブルスニーク判定時間 (ミリ秒)
+    double_sneak_threshold: 500
+  # PTSリクエスト時のプレフィックス
+  request_prefix: "&8[&ePTS要請&8]"
+
+# 無線システム設定
+radio:
+  # デフォルト周波数
+  default_frequency: "118.0"
+  # 無線メッセージのフォーマット
+  format: "&8[&b無線 %freq%&8] &7%rank% %player%&8: &f%message%"
+
+# 隔離システム設定
+jail:
+  # 隔離場所 (ingameで /setjail で設定)
+  location:
+    world: "world"
+    x: 0
+    y: 64
+    z: 0
+  # 隔離中のメッセージ
+  blocked_message: "&c貴官は拘留中だ。発言は許可されていない。"
+
+# 戦闘ログ設定
+killlog:
+  # ログの保存日数
+  retention_days: 30
+  # 詳細ログの有効化
+  detailed: true
+
+# メッセージ設定
+messages:
+  prefix: "&8[&c鉄の規律&8] "
+  
+  # 階級関連
+  rank_promoted: "&a%player% を &f%rank% &aに昇進させた。"
+  rank_demoted: "&e%player% を &f%rank% &eに降格させた。"
+  rank_changed_self: "&aあなたの階級が &f%rank% &aに変更された。"
+  rank_already_max: "&cこれ以上昇進できない。"
+  rank_already_min: "&cこれ以上降格できない。"
+  
+  # PTS関連
+  pts_granted: "&a%player% に &f%seconds%秒 &aの発言権を付与した。"
+  pts_received: "&a発言許可を受けた。残り &f%seconds%秒&a。"
+  pts_expired: "&e発言許可が失効した。"
+  pts_required: "&c発言には上官の許可が必要だ。スニーク2回でPTS要請。"
+  pts_request_sent: "&ePTS要請を送信した。上官の許可を待て。"
+  pts_request_notify: "&e%player% が発言許可を求めている。 &7/grant %player%"
+  pts_request_timeout: "&c発言許可が得られなかった。再度要請してください。"
+  
+  # 無線関連
+  radio_joined: "&a無線周波数 &f%freq% &aに参加した。"
+  radio_left: "&e無線から離脱した。"
+  radio_usage: "&c使用法: /radio <周波数> または /radio off"
+  
+  # 隔離関連
+  jail_sent: "&c%player% を拘留した。理由: %reason%"
+  jail_released: "&a%player% を釈放した。"
+  jail_you_jailed: "&c貴官は拘留された。理由: %reason%"
+  jail_you_released: "&a釈放された。任務に戻れ。"
+  jail_not_set: "&c隔離場所が設定されていない。/setjail を実行せよ。"
+  jail_location_set: "&a隔離場所を設定した。"
+  
+  # 一般
+  player_not_found: "&cプレイヤーが見つからない: %player%"
+  no_permission: "&c権限がない。"
+  config_reloaded: "&a設定をリロードした。"
+  
+  # 階級制限
+  rank_insufficient: "&c少尉以上の階級が必要だ。必要階級: {required}"
+  rank_cannot_operate: "&c{target}（{target_rank}）を操作する権限がない。自分より下位の階級のみ操作可能。"
+
+# Discord連携設定
+discord:
+  # Discord連携を有効化
+  enabled: true
+  # Bot Token (Discord Developer Portal で取得)
+  bot_token: ""
+  # 通知チャンネルID
+  notification_channel_id: ""
+  # サーバー(ギルド)ID
+  guild_id: ""
+  # 未認証ロールID (サーバー参加時に付与)
+  unverified_role_id: ""
+  # 認証済みロールID (連携完了時に付与)
+  verified_role_id: ""

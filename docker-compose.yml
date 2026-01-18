@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  minecraft:
+    build: .
+    container_name: irondiscipline-mc
+    restart: unless-stopped
+    ports:
+      - "25565:25565"
+    environment:
+      - MEMORY=3G
+      - MINECRAFT_VERSION=1.21.1
+    volumes:
+      - ./data/world:/minecraft/world
+      - ./data/plugins/IronDiscipline:/minecraft/plugins/IronDiscipline
+      - ./data/plugins/LuckPerms:/minecraft/plugins/LuckPerms
+      - ./data/logs:/minecraft/logs
+    stdin_open: true
+    tty: true

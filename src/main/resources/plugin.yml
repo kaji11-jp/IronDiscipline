@@ -1,0 +1,135 @@
+name: IronDiscipline
+version: ${project.version}
+main: com.irondiscipline.IronDiscipline
+api-version: '1.20'
+authors: [IronDiscipline Team]
+description: 鉄の規律 - 軍事RP向け規律システムプラグイン
+website: https://github.com/irondiscipline
+
+depend:
+  - LuckPerms
+
+softdepend:
+  - Geyser-Spigot
+
+commands:
+  promote:
+    description: プレイヤーを昇進させる
+    usage: /promote <player>
+    permission: iron.rank.promote
+  demote:
+    description: プレイヤーを降格させる
+    usage: /demote <player>
+    permission: iron.rank.demote
+  grant:
+    description: 発言権を一時的に付与する
+    usage: /grant <player> [seconds]
+    permission: iron.pts.grant
+  radio:
+    description: 無線周波数に参加する
+    usage: /radio <frequency>
+    permission: iron.radio.use
+  radiobroadcast:
+    description: 無線でメッセージを送信する
+    usage: /radiobroadcast <message>
+    aliases: [rb]
+    permission: iron.radio.use
+  jail:
+    description: プレイヤーを隔離する
+    usage: /jail <player> [reason]
+    permission: iron.jail.use
+  unjail:
+    description: プレイヤーを釈放する
+    usage: /unjail <player>
+    permission: iron.jail.use
+  setjail:
+    description: 隔離場所を設定する
+    usage: /setjail
+    permission: iron.jail.admin
+  killlog:
+    description: 戦闘ログを閲覧する
+    usage: /killlog [player] [count]
+    permission: iron.killlog.view
+  irondiscipline:
+    description: プラグイン管理コマンド
+    usage: /irondiscipline reload
+    aliases: [iron, id]
+    permission: iron.admin
+  exam:
+    description: 試験チーム管理
+    usage: /exam <create|delete|add|remove|start|end|list|info>
+    permission: iron.exam.use
+  warn:
+    description: プレイヤーに警告を与える
+    usage: /warn <player> <理由>
+    permission: iron.warn.use
+  warnings:
+    description: 警告履歴を表示
+    usage: /warnings [player]
+    permission: iron.warn.view
+  clearwarnings:
+    description: 警告をクリア
+    usage: /clearwarnings <player>
+    permission: iron.warn.admin
+  unwarn:
+    description: 最新の警告を取り消し
+    usage: /unwarn <player>
+    permission: iron.warn.admin
+  playtime:
+    description: 勤務時間を表示
+    usage: /playtime [player|top]
+    permission: iron.playtime.view
+  division:
+    description: 部隊管理
+    usage: /division <set|remove|list|info|members>
+    permission: iron.division.use
+  link:
+    description: Discordアカウント連携
+    usage: /link [コード]
+
+permissions:
+  iron.rank.promote:
+    description: 昇進コマンドを使用可能
+    default: op
+  iron.rank.demote:
+    description: 降格コマンドを使用可能
+    default: op
+  iron.pts.grant:
+    description: 発言権付与コマンドを使用可能
+    default: op
+  iron.pts.bypass:
+    description: PTS制限を無視
+    default: op
+  iron.radio.use:
+    description: 無線を使用可能
+    default: true
+  iron.jail.use:
+    description: 隔離/釈放コマンドを使用可能
+    default: op
+  iron.jail.admin:
+    description: 隔離場所設定可能
+    default: op
+  iron.killlog.view:
+    description: 戦闘ログを閲覧可能
+    default: op
+  iron.admin:
+    description: プラグイン管理権限
+    default: op
+  iron.exam.use:
+    description: 試験管理コマンドを使用可能
+    default: op
+  iron.warn.use:
+    description: 警告を与える
+    default: op
+  iron.warn.view:
+    description: 警告履歴を閲覧
+    default: true
+  iron.warn.admin:
+    description: 警告管理（削除など）
+    default: op
+  iron.playtime.view:
+    description: 勤務時間を閲覧
+    default: true
+  iron.division.use:
+    description: 部隊管理
+    default: op

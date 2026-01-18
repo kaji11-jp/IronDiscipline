@@ -1,0 +1,63 @@
+# Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.log
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Server run files (prevent leaking secrets in local run)
+plugins/
+logs/
+cache/
+crash-reports/
+libraries/
+versions/
+world/
+world_nether/
+world_the_end/
+user_jvm_args.txt
+eula.txt
+paper.jar
+server.properties
+
+# Docker
+data/
+
+# Server Configs & Data
+banned-ips.json
+banned-players.json
+ops.json
+whitelist.json
+usercache.json
+version_history.json
+bukkit.yml
+commands.yml
+help.yml
+permissions.yml
+spigot.yml
+paper.yml
+config/
+
+# Maven generated
+dependency-reduced-pom.xml
+
+# Shell history
+.console_history
