@@ -69,65 +69,78 @@ public class DiscordManager extends ListenerAdapter {
                     .addEventListeners(this)
                     .build();
 
-            // コマンド登録
-            jda.updateCommands().addCommands(
-                    Commands.slash("link", "Minecraftアカウントと連携"),
-                    Commands.slash("unlink", "連携を解除"),
-                    Commands.slash("status", "サーバー状態を表示"),
-                    Commands.slash("players", "オンラインプレイヤー一覧"),
-                    Commands.slash("playtime", "勤務時間を確認"),
-                    Commands.slash("rank", "自分の階級を確認"),
-                    Commands.slash("warn", "プレイヤーに警告")
-                            .addOption(OptionType.USER, "user", "対象ユーザー", true)
-                            .addOption(OptionType.STRING, "reason", "理由", true),
-                    Commands.slash("announce", "ゲーム内アナウンス")
-                            .addOption(OptionType.STRING, "message", "メッセージ", true),
-                    Commands.slash("donate", "サーバー運営費の寄付情報"),
-                    Commands.slash("setgoal", "寄付目標を設定（管理者）")
-                            .addOption(OptionType.INTEGER, "goal", "月間目標金額（円）", true)
-                            .addOption(OptionType.INTEGER, "current", "現在の寄付額（円）", true),
+            // コマンド登録は onGuildReady で行う
+            plugin.getLogger().info("Discord Bot ログイン完了");
 
-                    // === New Commands ===
-                    Commands.slash("settings", "Bot設定の変更（管理者）")
-                            .addOption(OptionType.STRING, "action", "操作 (set/get/role)", true)
-                            .addOption(OptionType.STRING, "key", "設定キー or 階級名", false)
-                            .addOption(OptionType.STRING, "value", "設定値 or ロールID", false),
-
-                    Commands.slash("panel", "機能パネルの設置（管理者）")
-                            .addOption(OptionType.STRING, "type", "パネル種類 (auth/roles)", true),
-
-                    Commands.slash("division", "部隊管理（管理者）")
-                            .addOption(OptionType.STRING, "action", "操作 (create/add/remove/list)", true)
-                            .addOption(OptionType.STRING, "arg1", "引数1 (部隊名/ユーザー)", false)
-                            .addOption(OptionType.STRING, "arg2", "引数2 (部隊名)", false),
-
-                    Commands.slash("promote", "昇進（管理者）")
-                            .addOption(OptionType.USER, "user", "対象ユーザー", true),
-
-                    Commands.slash("demote", "降格（管理者）")
-                            .addOption(OptionType.USER, "user", "対象ユーザー", true),
-
-                    Commands.slash("setrank", "階級指定（管理者）")
-                            .addOption(OptionType.USER, "user", "対象ユーザー", true)
-                            .addOption(OptionType.STRING, "rank", "階級ID", true),
-
-                    Commands.slash("kick", "キック（管理者）")
-                            .addOption(OptionType.USER, "user", "対象ユーザー", true)
-                            .addOption(OptionType.STRING, "reason", "理由", true),
-
-                    Commands.slash("ban", "BAN（管理者）")
-                            .addOption(OptionType.USER, "user", "対象ユーザー", true)
-                            .addOption(OptionType.STRING, "reason", "理由", true))
-                    .queue();
-
-            enabled = true;
-            plugin.getLogger().info("Discord Bot 起動成功");
             return true;
 
         } catch (Exception e) {
             plugin.getLogger().severe("Discord Bot 起動失敗: " + e.getMessage());
             return false;
         }
+    }
+
+    @Override
+    public void onGuildReady(net.dv8tion.jda.api.events.guild.GuildReadyEvent event) {
+        String configGuildId = this.guildId;
+        if (configGuildId != null && !configGuildId.isEmpty() && !event.getGuild().getId().equals(configGuildId)) {
+            return; // 指定されたサーバー以外は無視
+        }
+
+        plugin.getLogger()
+                .info("Guild Commands を登録中: " + event.getGuild().getName() + " (" + event.getGuild().getId() + ")");
+
+        event.getGuild().updateCommands().addCommands(
+                Commands.slash("link", "Minecraftアカウントと連携"),
+                Commands.slash("unlink", "連携を解除"),
+                Commands.slash("status", "サーバー状態を表示"),
+                Commands.slash("players", "オンラインプレイヤー一覧"),
+                Commands.slash("playtime", "勤務時間を確認"),
+                Commands.slash("rank", "自分の階級を確認"),
+                Commands.slash("warn", "プレイヤーに警告")
+                        .addOption(OptionType.USER, "user", "対象ユーザー", true)
+                        .addOption(OptionType.STRING, "reason", "理由", true),
+                Commands.slash("announce", "ゲーム内アナウンス")
+                        .addOption(OptionType.STRING, "message", "メッセージ", true),
+                Commands.slash("donate", "サーバー運営費の寄付情報"),
+                Commands.slash("setgoal", "寄付目標を設定（管理者）")
+                        .addOption(OptionType.INTEGER, "goal", "月間目標金額（円）", true)
+                        .addOption(OptionType.INTEGER, "current", "現在の寄付額（円）", true),
+
+                // === New Commands ===
+                Commands.slash("settings", "Bot設定の変更（管理者）")
+                        .addOption(OptionType.STRING, "action", "操作 (set/get/role)", true)
+                        .addOption(OptionType.STRING, "key", "設定キー or 階級名", false)
+                        .addOption(OptionType.STRING, "value", "設定値 or ロールID", false),
+
+                Commands.slash("panel", "機能パネルの設置（管理者）")
+                        .addOption(OptionType.STRING, "type", "パネル種類 (auth/roles)", true),
+
+                Commands.slash("division", "部隊管理（管理者）")
+                        .addOption(OptionType.STRING, "action", "操作 (create/add/remove/list)", true)
+                        .addOption(OptionType.STRING, "arg1", "引数1 (部隊名/ユーザー)", false)
+                        .addOption(OptionType.STRING, "arg2", "引数2 (部隊名)", false),
+
+                Commands.slash("promote", "昇進（管理者）")
+                        .addOption(OptionType.USER, "user", "対象ユーザー", true),
+
+                Commands.slash("demote", "降格（管理者）")
+                        .addOption(OptionType.USER, "user", "対象ユーザー", true),
+
+                Commands.slash("setrank", "階級指定（管理者）")
+                        .addOption(OptionType.USER, "user", "対象ユーザー", true)
+                        .addOption(OptionType.STRING, "rank", "階級ID", true),
+
+                Commands.slash("kick", "キック（管理者）")
+                        .addOption(OptionType.USER, "user", "対象ユーザー", true)
+                        .addOption(OptionType.STRING, "reason", "理由", true),
+
+                Commands.slash("ban", "BAN（管理者）")
+                        .addOption(OptionType.USER, "user", "対象ユーザー", true)
+                        .addOption(OptionType.STRING, "reason", "理由", true))
+                .queue(
+                        success -> plugin.getLogger().info("コマンド登録成功！ (" + success.size() + "個)"),
+                        error -> plugin.getLogger().severe("コマンド登録失敗: " + error.getMessage()));
     }
 
     /**
