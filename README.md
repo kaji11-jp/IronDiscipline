@@ -41,6 +41,9 @@ mvn clean package
 ### 2. 一般的なVPS (Xserver, ConoHaなど)
 [汎用VPSデプロイガイド (Docs)](docs/VPS_DEPLOY.md) を参照してください。Ubuntu環境であれば、汎用スクリプトで一発セットアップ可能です。
 
+### 3. 統合版 (スマホ/Switch) 対応
+[統合版対応ガイド (Docs)](docs/CROSS_PLAY.md) を参照してください。Geyserを使用してクロスプラットフォームプレイを実現します。
+
 ## Discord連携設定
 
 `config.yml` に Discord Bot Token 等を設定してください。
