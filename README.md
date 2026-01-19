@@ -44,6 +44,22 @@ mvn clean package
 ### 3. 統合版 (スマホ/Switch) 対応
 [統合版対応ガイド (Docs)](docs/CROSS_PLAY.md) を参照してください。Geyserを使用してクロスプラットフォームプレイを実現します。
 
+### 3. 統合版 (スマホ/Switch) 対応
+[統合版対応ガイド (Docs)](docs/CROSS_PLAY.md) を参照してください。Geyserを使用してクロスプラットフォームプレイを実現します。
+
+## 🔄 自動アップデート
+
+このプロジェクトは **GitHub Actions** による自動ビルドに対応しています。
+`main` ブランチにプッシュされると、自動的に最新版がビルドされ、[Releases](https://github.com/kaji11-jp/IronDiscipline/releases) に `latest` タグとして公開されます。
+
+### サーバーでのアップデート方法
+以下のコマンドを1回実行するだけで、最新版への更新と再起動が完了します。
+
+```bash
+# SSH接続後
+curl -sL https://raw.githubusercontent.com/kaji11-jp/IronDiscipline/main/scripts/update-server.sh | sudo bash
+```
+
 ## Discord連携設定
 
 `config.yml` に Discord Bot Token 等を設定してください。
