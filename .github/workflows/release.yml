@@ -25,7 +25,7 @@ jobs:
       run: mvn -B package --file pom.xml
 
     - name: Rename Artifact
-      run: mv target/IronDiscipline-1.0.0.jar target/IronDiscipline-latest.jar
+      run: mv target/IronDiscipline-*.jar target/IronDiscipline-latest.jar
 
     - name: Release
       uses: softprops/action-gh-release@v1

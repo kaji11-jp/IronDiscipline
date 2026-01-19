@@ -21,7 +21,7 @@ mvn clean package
 gsutil mb gs://irondiscipline-server
 
 # JARアップロード
-gsutil cp target/IronDiscipline-1.0.0.jar gs://irondiscipline-server/
+gsutil cp target/IronDiscipline-latest.jar gs://irondiscipline-server/
 gsutil cp plugins/LuckPerms*.jar gs://irondiscipline-server/
 ```
 
