@@ -15,12 +15,10 @@ import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEve
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
-import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
-import com.irondiscipline.manager.DivisionManager;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -44,7 +42,6 @@ public class DiscordManager extends ListenerAdapter {
     // 寄付システム
     private int donationGoal = 5000; // 月間目標（円）
     private int donationCurrent = 0; // 現在の寄付額
-    private String donationInfo = ""; // 寄付先情報
 
     public DiscordManager(IronDiscipline plugin) {
         this.plugin = plugin;
@@ -767,25 +764,28 @@ public class DiscordManager extends ListenerAdapter {
         }
 
         // RankManager requires Player object currently, need to fix if offline support
-        // needed.
-        // For now, only online players or use basic implementation.
-        // Assuming RankManager handles offline players correctly or we skip offline
-        // support for now.
-        // Wait, getRank() usually requires Player or checks LP.
-        // Let's rely on plugin methods.
+        // RankManager handles offline players via getRankAsync
+        plugin.getRankManager().getRankAsync(targetUUID).thenAccept(current -> {
+            Rank next = promote ? current.getNextRank() : current.getPreviousRank();
 
-        Rank current = plugin.getRankManager().getRank(targetUUID);
-        Rank next = promote ? current.getNext() : current.getPrevious();
+            if (next == null) {
+                event.reply("❌ これ以上階級を変更できません (現在: " + current.getId() + ")").setEphemeral(true).queue();
+                return;
+            }
 
-        if (next == null) {
-            event.reply("❌ これ以上階級を変更できません (現在: " + current.getId() + ")").setEphemeral(true).queue();
-            return;
-        }
+            plugin.getRankManager().setRankByUUID(targetUUID, next).thenAccept(success -> {
+                if (success) {
+                    event.getHook().sendMessage(
+                            "✅ " + (promote ? "昇進" : "降格") + "させました: " + current.getId() + " -> " + next.getId())
+                            .queue();
+                    updateNickname(targetDiscordId, Bukkit.getOfflinePlayer(targetUUID).getName(), next);
+                } else {
+                    event.getHook().sendMessage("❌ 階級変更に失敗しました。").queue();
+                }
+            });
+        });
 
-        plugin.getRankManager().setRank(targetUUID, next);
-        event.reply("✅ " + (promote ? "昇進" : "降格") + "させました: " + current.getId() + " -> " + next.getId()).queue();
-
-        updateNickname(targetDiscordId, Bukkit.getOfflinePlayer(targetUUID).getName(), next);
+        event.deferReply().queue();
     }
 
     private void handleSetRank(SlashCommandInteractionEvent event) {
@@ -841,8 +841,14 @@ public class DiscordManager extends ListenerAdapter {
                     target.kickPlayer(ChatColor.RED + "Kicked by Discord Admin\nReason: " + reason);
                 }
             } else if (type.equals("ban")) {
-                Bukkit.getBanList(org.bukkit.BanList.Type.NAME).addBan(Bukkit.getOfflinePlayer(targetUUID).getName(),
-                        reason, null, "Console(Discord)");
+                // Deprecated method usage - acceptable for now for compatibility
+                @SuppressWarnings("deprecation")
+                org.bukkit.BanList banList = Bukkit.getBanList(org.bukkit.BanList.Type.NAME);
+                if (banList != null) {
+                    banList.addBan(Bukkit.getOfflinePlayer(targetUUID).getName(), reason, (java.util.Date) null,
+                            "Console(Discord)");
+                }
+
                 Player target = Bukkit.getPlayer(targetUUID);
                 if (target != null) {
                     target.kickPlayer(ChatColor.RED + "Banned by Discord Admin\nReason: " + reason);
@@ -892,35 +898,40 @@ public class DiscordManager extends ListenerAdapter {
             }
 
             // Sync logic
-            Rank rank = plugin.getRankManager().getRankAsync(uuid).join();
-            String rankRoleId = plugin.getConfigManager().getDiscordRankRoleId(rank.name());
-            String verifiedRoleId = plugin.getConfigManager().getDiscordVerifiedRoleId();
+            event.deferReply(true).queue();
 
-            Guild guild = event.getGuild();
-            Member member = event.getMember();
+            plugin.getRankManager().getRankAsync(uuid).thenAccept(rank -> {
+                String rankRoleId = plugin.getConfigManager().getDiscordRankRoleId(rank.name());
+                String verifiedRoleId = plugin.getConfigManager().getDiscordVerifiedRoleId();
 
-            if (guild != null && member != null) {
-                // 認証済みロールチェック
-                if (verifiedRoleId != null && !verifiedRoleId.isEmpty()) {
-                    Role vRole = guild.getRoleById(verifiedRoleId);
-                    if (vRole != null && !member.getRoles().contains(vRole)) {
-                        guild.addRoleToMember(member, vRole).queue();
+                Guild guild = event.getGuild();
+                Member member = event.getMember();
+
+                if (guild != null && member != null) {
+                    // 認証済みロールチェック
+                    if (verifiedRoleId != null && !verifiedRoleId.isEmpty()) {
+                        Role vRole = guild.getRoleById(verifiedRoleId);
+                        if (vRole != null && !member.getRoles().contains(vRole)) {
+                            guild.addRoleToMember(member, vRole).queue();
+                        }
                     }
-                }
 
-                // 階級ロールチェック
-                if (rankRoleId != null && !rankRoleId.isEmpty()) {
-                    Role rRole = guild.getRoleById(rankRoleId);
-                    if (rRole != null && !member.getRoles().contains(rRole)) {
-                        guild.addRoleToMember(member, rRole).queue();
+                    // 階級ロールチェック
+                    if (rankRoleId != null && !rankRoleId.isEmpty()) {
+                        Role rRole = guild.getRoleById(rankRoleId);
+                        if (rRole != null && !member.getRoles().contains(rRole)) {
+                            guild.addRoleToMember(member, rRole).queue();
+                        }
                     }
+
+                    // ニックネーム更新
+                    updateNickname(discordId, Bukkit.getOfflinePlayer(uuid).getName(), rank);
+
+                    event.getHook().sendMessage("✅ ロールと階級情報を同期しました！").queue();
+                } else {
+                    event.getHook().sendMessage("❌ サーバー情報の取得に失敗しました。").queue();
                 }
-
-                // ニックネーム更新
-                updateNickname(discordId, Bukkit.getOfflinePlayer(uuid).getName(), rank);
-            }
-
-            event.reply("✅ ロールと階級情報を同期しました！").setEphemeral(true).queue();
+            });
 
         } else if (id.equals("role_toggle_notify")) {
             String notifyRoleId = plugin.getConfigManager().getDiscordNotificationRoleId();
