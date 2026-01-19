@@ -25,7 +25,7 @@ public class ConfigManager {
     }
 
     // ===== General =====
-    
+
     public boolean isDebug() {
         return config.getBoolean("general.debug", false);
     }
@@ -35,7 +35,7 @@ public class ConfigManager {
     }
 
     // ===== Database =====
-    
+
     public String getDatabaseType() {
         return config.getString("database.type", "h2");
     }
@@ -61,13 +61,13 @@ public class ConfigManager {
     }
 
     // ===== Ranks =====
-    
+
     public String getRankMetaKey() {
         return config.getString("ranks.meta_key", "military_rank");
     }
 
     // ===== PTS =====
-    
+
     public int getPTSRequireBelowWeight() {
         return config.getInt("pts.require_below_weight", 25);
     }
@@ -89,7 +89,7 @@ public class ConfigManager {
     }
 
     // ===== Radio =====
-    
+
     public String getDefaultFrequency() {
         return config.getString("radio.default_frequency", "118.0");
     }
@@ -99,13 +99,13 @@ public class ConfigManager {
     }
 
     // ===== Jail =====
-    
+
     public Location getJailLocation() {
         String world = config.getString("jail.location.world", "world");
         double x = config.getDouble("jail.location.x", 0);
         double y = config.getDouble("jail.location.y", 64);
         double z = config.getDouble("jail.location.z", 0);
-        
+
         if (plugin.getServer().getWorld(world) == null) {
             return null;
         }
@@ -125,7 +125,7 @@ public class ConfigManager {
     }
 
     // ===== KillLog =====
-    
+
     public int getKillLogRetentionDays() {
         return config.getInt("killlog.retention_days", 30);
     }
@@ -135,7 +135,7 @@ public class ConfigManager {
     }
 
     // ===== Messages =====
-    
+
     public String getPrefix() {
         return colorize(config.getString("messages.prefix", "&8[&c鉄の規律&8] "));
     }
@@ -160,7 +160,7 @@ public class ConfigManager {
     }
 
     // ===== Discord =====
-    
+
     public boolean isDiscordEnabled() {
         return config.getBoolean("discord.enabled", false);
     }
@@ -185,12 +185,40 @@ public class ConfigManager {
         return config.getString("discord.verified_role_id", "");
     }
 
+    public String getDiscordNotificationRoleId() {
+        return config.getString("discord.notification_role_id", "");
+    }
+
+    public String getDiscordConsoleRoleId() {
+        return config.getString("discord.console_role_id", "");
+    }
+
+    public String getDiscordRankRoleId(String rankId) {
+        return config.getString("discord.rank_roles." + rankId.toUpperCase(), "");
+    }
+
     public String getDonationInfo() {
         return config.getString("discord.donation_info", "");
     }
 
+    /**
+     * Discord設定を更新して保存
+     */
+    public void setDiscordSetting(String key, Object value) {
+        config.set("discord." + key, value);
+        plugin.saveConfig();
+    }
+
+    /**
+     * 階級ロール設定を更新
+     */
+    public void setDiscordRankRole(String rankId, String roleId) {
+        config.set("discord.rank_roles." + rankId.toUpperCase(), roleId);
+        plugin.saveConfig();
+    }
+
     // ===== Utility =====
-    
+
     private String colorize(String text) {
         return ChatColor.translateAlternateColorCodes('&', text);
     }

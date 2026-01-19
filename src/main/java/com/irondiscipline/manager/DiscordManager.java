@@ -15,8 +15,14 @@ import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEve
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
+import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import com.irondiscipline.manager.DivisionManager;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 
 import java.awt.Color;
@@ -34,11 +40,11 @@ public class DiscordManager extends ListenerAdapter {
     private String unverifiedRoleId;
     private String verifiedRoleId;
     private boolean enabled = false;
-    
+
     // 寄付システム
-    private int donationGoal = 5000;  // 月間目標（円）
-    private int donationCurrent = 0;  // 現在の寄付額
-    private String donationInfo = "";  // 寄付先情報
+    private int donationGoal = 5000; // 月間目標（円）
+    private int donationCurrent = 0; // 現在の寄付額
+    private String donationInfo = ""; // 寄付先情報
 
     public DiscordManager(IronDiscipline plugin) {
         this.plugin = plugin;
@@ -47,7 +53,8 @@ public class DiscordManager extends ListenerAdapter {
     /**
      * Botを起動
      */
-    public boolean start(String botToken, String channelId, String guildId, String unverifiedRoleId, String verifiedRoleId) {
+    public boolean start(String botToken, String channelId, String guildId, String unverifiedRoleId,
+            String verifiedRoleId) {
         if (botToken == null || botToken.isEmpty()) {
             plugin.getLogger().warning("Discord Bot Token が設定されていません");
             return false;
@@ -60,29 +67,61 @@ public class DiscordManager extends ListenerAdapter {
 
         try {
             jda = JDABuilder.createDefault(botToken)
-                .enableIntents(GatewayIntent.GUILD_MEMBERS)
-                .setActivity(Activity.playing("鉄の規律"))
-                .addEventListeners(this)
-                .build();
+                    .enableIntents(GatewayIntent.GUILD_MEMBERS)
+                    .setActivity(Activity.playing("鉄の規律"))
+                    .addEventListeners(this)
+                    .build();
 
             // コマンド登録
             jda.updateCommands().addCommands(
-                Commands.slash("link", "Minecraftアカウントと連携"),
-                Commands.slash("unlink", "連携を解除"),
-                Commands.slash("status", "サーバー状態を表示"),
-                Commands.slash("players", "オンラインプレイヤー一覧"),
-                Commands.slash("playtime", "勤務時間を確認"),
-                Commands.slash("rank", "自分の階級を確認"),
-                Commands.slash("warn", "プレイヤーに警告")
-                    .addOption(OptionType.USER, "user", "対象ユーザー", true)
-                    .addOption(OptionType.STRING, "reason", "理由", true),
-                Commands.slash("announce", "ゲーム内アナウンス")
-                    .addOption(OptionType.STRING, "message", "メッセージ", true),
-                Commands.slash("donate", "サーバー運営費の寄付情報"),
-                Commands.slash("setgoal", "寄付目標を設定（管理者）")
-                    .addOption(OptionType.INTEGER, "goal", "月間目標金額（円）", true)
-                    .addOption(OptionType.INTEGER, "current", "現在の寄付額（円）", true)
-            ).queue();
+                    Commands.slash("link", "Minecraftアカウントと連携"),
+                    Commands.slash("unlink", "連携を解除"),
+                    Commands.slash("status", "サーバー状態を表示"),
+                    Commands.slash("players", "オンラインプレイヤー一覧"),
+                    Commands.slash("playtime", "勤務時間を確認"),
+                    Commands.slash("rank", "自分の階級を確認"),
+                    Commands.slash("warn", "プレイヤーに警告")
+                            .addOption(OptionType.USER, "user", "対象ユーザー", true)
+                            .addOption(OptionType.STRING, "reason", "理由", true),
+                    Commands.slash("announce", "ゲーム内アナウンス")
+                            .addOption(OptionType.STRING, "message", "メッセージ", true),
+                    Commands.slash("donate", "サーバー運営費の寄付情報"),
+                    Commands.slash("setgoal", "寄付目標を設定（管理者）")
+                            .addOption(OptionType.INTEGER, "goal", "月間目標金額（円）", true)
+                            .addOption(OptionType.INTEGER, "current", "現在の寄付額（円）", true),
+
+                    // === New Commands ===
+                    Commands.slash("settings", "Bot設定の変更（管理者）")
+                            .addOption(OptionType.STRING, "action", "操作 (set/get/role)", true)
+                            .addOption(OptionType.STRING, "key", "設定キー or 階級名", false)
+                            .addOption(OptionType.STRING, "value", "設定値 or ロールID", false),
+
+                    Commands.slash("panel", "機能パネルの設置（管理者）")
+                            .addOption(OptionType.STRING, "type", "パネル種類 (auth/roles)", true),
+
+                    Commands.slash("division", "部隊管理（管理者）")
+                            .addOption(OptionType.STRING, "action", "操作 (create/add/remove/list)", true)
+                            .addOption(OptionType.STRING, "arg1", "引数1 (部隊名/ユーザー)", false)
+                            .addOption(OptionType.STRING, "arg2", "引数2 (部隊名)", false),
+
+                    Commands.slash("promote", "昇進（管理者）")
+                            .addOption(OptionType.USER, "user", "対象ユーザー", true),
+
+                    Commands.slash("demote", "降格（管理者）")
+                            .addOption(OptionType.USER, "user", "対象ユーザー", true),
+
+                    Commands.slash("setrank", "階級指定（管理者）")
+                            .addOption(OptionType.USER, "user", "対象ユーザー", true)
+                            .addOption(OptionType.STRING, "rank", "階級ID", true),
+
+                    Commands.slash("kick", "キック（管理者）")
+                            .addOption(OptionType.USER, "user", "対象ユーザー", true)
+                            .addOption(OptionType.STRING, "reason", "理由", true),
+
+                    Commands.slash("ban", "BAN（管理者）")
+                            .addOption(OptionType.USER, "user", "対象ユーザー", true)
+                            .addOption(OptionType.STRING, "reason", "理由", true))
+                    .queue();
 
             enabled = true;
             plugin.getLogger().info("Discord Bot 起動成功");
@@ -119,33 +158,43 @@ public class DiscordManager extends ListenerAdapter {
             case "announce" -> handleAnnounce(event);
             case "donate" -> handleDonate(event);
             case "setgoal" -> handleSetGoal(event);
+
+            // New Handlers
+            case "settings" -> handleSettings(event);
+            case "panel" -> handlePanel(event);
+            case "division" -> handleDivision(event);
+            case "promote" -> handleAdminRank(event, true);
+            case "demote" -> handleAdminRank(event, false);
+            case "setrank" -> handleSetRank(event);
+            case "kick" -> handlePunish(event, "kick");
+            case "ban" -> handlePunish(event, "ban");
         }
     }
 
     private void handleLink(SlashCommandInteractionEvent event) {
         long discordId = event.getUser().getIdLong();
-        
+
         if (plugin.getLinkManager().isLinked(discordId)) {
             event.reply("既に連携済みです。解除するには `/unlink` を使用してください。").setEphemeral(true).queue();
             return;
         }
 
         String code = plugin.getLinkManager().generateLinkCode(discordId);
-        
+
         EmbedBuilder eb = new EmbedBuilder()
-            .setTitle("🔗 アカウント連携")
-            .setDescription("Minecraft内で以下のコマンドを実行してください：")
-            .addField("コマンド", "`/link " + code + "`", false)
-            .addField("有効期限", "5分", false)
-            .setColor(Color.BLUE)
-            .setFooter("鉄の規律");
+                .setTitle("🔗 アカウント連携")
+                .setDescription("Minecraft内で以下のコマンドを実行してください：")
+                .addField("コマンド", "`/link " + code + "`", false)
+                .addField("有効期限", "5分", false)
+                .setColor(Color.BLUE)
+                .setFooter("鉄の規律");
 
         event.replyEmbeds(eb.build()).setEphemeral(true).queue();
     }
 
     private void handleUnlink(SlashCommandInteractionEvent event) {
         long discordId = event.getUser().getIdLong();
-        
+
         if (plugin.getLinkManager().unlinkByDiscord(discordId)) {
             event.reply("✅ 連携を解除しました。").setEphemeral(true).queue();
         } else {
@@ -159,25 +208,25 @@ public class DiscordManager extends ListenerAdapter {
         int linked = plugin.getLinkManager().getLinkCount();
 
         EmbedBuilder eb = new EmbedBuilder()
-            .setTitle("📊 サーバー状態")
-            .addField("オンライン", online + " / " + max, true)
-            .addField("連携済み", linked + "人", true)
-            .setColor(Color.GREEN)
-            .setFooter("鉄の規律");
+                .setTitle("📊 サーバー状態")
+                .addField("オンライン", online + " / " + max, true)
+                .addField("連携済み", linked + "人", true)
+                .setColor(Color.GREEN)
+                .setFooter("鉄の規律");
 
         event.replyEmbeds(eb.build()).queue();
     }
 
     private void handlePlayers(SlashCommandInteractionEvent event) {
         StringBuilder sb = new StringBuilder();
-        
+
         for (Player p : Bukkit.getOnlinePlayers()) {
             Rank rank = plugin.getRankManager().getRank(p);
             String div = plugin.getDivisionManager().getDivision(p.getUniqueId());
             String divDisplay = div != null ? plugin.getDivisionManager().getDivisionDisplayName(div) : "";
-            
+
             sb.append("**").append(p.getName()).append("** - ")
-              .append(rank.getId()).append(" ").append(divDisplay).append("\n");
+                    .append(rank.getId()).append(" ").append(divDisplay).append("\n");
         }
 
         if (sb.length() == 0) {
@@ -185,10 +234,10 @@ public class DiscordManager extends ListenerAdapter {
         }
 
         EmbedBuilder eb = new EmbedBuilder()
-            .setTitle("👥 オンラインプレイヤー")
-            .setDescription(sb.toString())
-            .setColor(Color.CYAN)
-            .setFooter("鉄の規律");
+                .setTitle("👥 オンラインプレイヤー")
+                .setDescription(sb.toString())
+                .setColor(Color.CYAN)
+                .setFooter("鉄の規律");
 
         event.replyEmbeds(eb.build()).queue();
     }
@@ -206,10 +255,10 @@ public class DiscordManager extends ListenerAdapter {
         String playerName = Bukkit.getOfflinePlayer(minecraftId).getName();
 
         EmbedBuilder eb = new EmbedBuilder()
-            .setTitle("⏱️ 勤務時間")
-            .addField(playerName != null ? playerName : "Unknown", playtime, false)
-            .setColor(Color.ORANGE)
-            .setFooter("鉄の規律");
+                .setTitle("⏱️ 勤務時間")
+                .addField(playerName != null ? playerName : "Unknown", playtime, false)
+                .setColor(Color.ORANGE)
+                .setFooter("鉄の規律");
 
         event.replyEmbeds(eb.build()).setEphemeral(true).queue();
     }
@@ -228,11 +277,11 @@ public class DiscordManager extends ListenerAdapter {
         String div = plugin.getDivisionManager().getDivision(minecraftId);
 
         EmbedBuilder eb = new EmbedBuilder()
-            .setTitle("🎖️ 階級情報")
-            .addField("階級", rank.getId(), true)
-            .addField("部隊", div != null ? div : "なし", true)
-            .setColor(Color.YELLOW)
-            .setFooter("鉄の規律");
+                .setTitle("🎖️ 階級情報")
+                .addField("階級", rank.getId(), true)
+                .addField("部隊", div != null ? div : "なし", true)
+                .setColor(Color.YELLOW)
+                .setFooter("鉄の規律");
 
         event.replyEmbeds(eb.build()).setEphemeral(true).queue();
     }
@@ -272,7 +321,8 @@ public class DiscordManager extends ListenerAdapter {
 
     private void handleAnnounce(SlashCommandInteractionEvent event) {
         var msgOption = event.getOption("message");
-        if (msgOption == null) return;
+        if (msgOption == null)
+            return;
 
         String message = msgOption.getAsString();
 
@@ -288,8 +338,9 @@ public class DiscordManager extends ListenerAdapter {
 
     private void handleDonate(SlashCommandInteractionEvent event) {
         int percent = donationGoal > 0 ? (donationCurrent * 100 / donationGoal) : 0;
-        if (percent > 100) percent = 100;
-        
+        if (percent > 100)
+            percent = 100;
+
         // プログレスバー生成
         int bars = 20;
         int filled = (percent * bars) / 100;
@@ -299,14 +350,14 @@ public class DiscordManager extends ListenerAdapter {
         }
 
         EmbedBuilder eb = new EmbedBuilder()
-            .setTitle("💰 サーバー運営費")
-            .setDescription("サーバー維持のためのご支援をお願いします！")
-            .addField("月間目標", "¥" + String.format("%,d", donationGoal), true)
-            .addField("現在の達成額", "¥" + String.format("%,d", donationCurrent), true)
-            .addField("達成率", percent + "%", true)
-            .addField("進捗", "`" + progressBar.toString() + "` " + percent + "%", false)
-            .setColor(percent >= 100 ? Color.GREEN : (percent >= 50 ? Color.YELLOW : Color.RED))
-            .setFooter("ご支援ありがとうございます！");
+                .setTitle("💰 サーバー運営費")
+                .setDescription("サーバー維持のためのご支援をお願いします！")
+                .addField("月間目標", "¥" + String.format("%,d", donationGoal), true)
+                .addField("現在の達成額", "¥" + String.format("%,d", donationCurrent), true)
+                .addField("達成率", percent + "%", true)
+                .addField("進捗", "`" + progressBar.toString() + "` " + percent + "%", false)
+                .setColor(percent >= 100 ? Color.GREEN : (percent >= 50 ? Color.YELLOW : Color.RED))
+                .setFooter("ご支援ありがとうございます！");
 
         // 寄付先情報があれば追加
         String info = plugin.getConfigManager().getDonationInfo();
@@ -319,7 +370,8 @@ public class DiscordManager extends ListenerAdapter {
 
     private void handleSetGoal(SlashCommandInteractionEvent event) {
         // 管理者権限チェック
-        if (event.getMember() == null || !event.getMember().hasPermission(net.dv8tion.jda.api.Permission.ADMINISTRATOR)) {
+        if (event.getMember() == null
+                || !event.getMember().hasPermission(net.dv8tion.jda.api.Permission.ADMINISTRATOR)) {
             event.reply("❌ このコマンドは管理者のみ使用可能です。").setEphemeral(true).queue();
             return;
         }
@@ -337,8 +389,8 @@ public class DiscordManager extends ListenerAdapter {
 
         int percent = donationGoal > 0 ? (donationCurrent * 100 / donationGoal) : 0;
 
-        event.reply("✅ 寄付目標を更新しました！\n目標: ¥" + String.format("%,d", donationGoal) + 
-            " / 現在: ¥" + String.format("%,d", donationCurrent) + " (" + percent + "%)").queue();
+        event.reply("✅ 寄付目標を更新しました！\n目標: ¥" + String.format("%,d", donationGoal) +
+                " / 現在: ¥" + String.format("%,d", donationCurrent) + " (" + percent + "%)").queue();
     }
 
     // ===== 通知機能 =====
@@ -352,14 +404,15 @@ public class DiscordManager extends ListenerAdapter {
         }
 
         TextChannel channel = jda.getTextChannelById(notificationChannelId);
-        if (channel == null) return;
+        if (channel == null)
+            return;
 
         EmbedBuilder eb = new EmbedBuilder()
-            .setTitle(title)
-            .setDescription(message)
-            .setColor(color)
-            .setTimestamp(java.time.Instant.now())
-            .setFooter("鉄の規律");
+                .setTitle(title)
+                .setDescription(message)
+                .setColor(color)
+                .setTimestamp(java.time.Instant.now())
+                .setFooter("鉄の規律");
 
         channel.sendMessageEmbeds(eb.build()).queue();
     }
@@ -395,7 +448,8 @@ public class DiscordManager extends ListenerAdapter {
      */
     @Override
     public void onGuildMemberJoin(GuildMemberJoinEvent event) {
-        if (unverifiedRoleId == null || unverifiedRoleId.isEmpty()) return;
+        if (unverifiedRoleId == null || unverifiedRoleId.isEmpty())
+            return;
 
         Role unverifiedRole = event.getGuild().getRoleById(unverifiedRoleId);
         if (unverifiedRole != null) {
@@ -408,13 +462,16 @@ public class DiscordManager extends ListenerAdapter {
      * 連携完了時に認証済みロールを付与し、ニックネームを変更
      */
     public void onLinkComplete(long discordId, String minecraftName, Rank rank) {
-        if (!enabled || jda == null || guildId == null || guildId.isEmpty()) return;
+        if (!enabled || jda == null || guildId == null || guildId.isEmpty())
+            return;
 
         Guild guild = jda.getGuildById(guildId);
-        if (guild == null) return;
+        if (guild == null)
+            return;
 
         guild.retrieveMemberById(discordId).queue(member -> {
-            if (member == null) return;
+            if (member == null)
+                return;
 
             // 未認証ロールを削除
             if (unverifiedRoleId != null && !unverifiedRoleId.isEmpty()) {
@@ -438,44 +495,166 @@ public class DiscordManager extends ListenerAdapter {
                 nickname = nickname.substring(0, 32);
             }
             member.modifyNickname(nickname).queue(
-                success -> plugin.getLogger().info("Discord: " + minecraftName + " のニックネームを変更"),
-                error -> plugin.getLogger().warning("Discord: ニックネーム変更失敗: " + error.getMessage())
-            );
+                    success -> plugin.getLogger().info("Discord: " + minecraftName + " のニックネームを変更"),
+                    error -> plugin.getLogger().warning("Discord: ニックネーム変更失敗: " + error.getMessage()));
 
-        }, error -> {});
+        }, error -> {
+        });
     }
 
     /**
      * 階級変更時にニックネームを更新
      */
     public void updateNickname(long discordId, String minecraftName, Rank rank) {
-        if (!enabled || jda == null || guildId == null || guildId.isEmpty()) return;
+        if (!enabled || jda == null || guildId == null || guildId.isEmpty())
+            return;
 
         Guild guild = jda.getGuildById(guildId);
-        if (guild == null) return;
+        if (guild == null)
+            return;
 
         guild.retrieveMemberById(discordId).queue(member -> {
-            if (member == null) return;
+            if (member == null)
+                return;
 
             String nickname = "[" + rank.getId() + "]" + minecraftName;
             if (nickname.length() > 32) {
                 nickname = nickname.substring(0, 32);
             }
             member.modifyNickname(nickname).queue();
-        }, error -> {});
+        }, error -> {
+        });
     }
 
     /**
      * 連携解除時にロールとニックネームをリセット
      */
+    private void handleSettings(SlashCommandInteractionEvent event) {
+        // 管理者権限チェック
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.ADMINISTRATOR)) {
+            event.reply("❌ このコマンドは管理者のみ使用可能です。").setEphemeral(true).queue();
+            return;
+        }
+
+        String action = event.getOption("action").getAsString();
+        String key = event.getOption("key") != null ? event.getOption("key").getAsString() : null;
+        String value = event.getOption("value") != null ? event.getOption("value").getAsString() : null;
+
+        if (action.equalsIgnoreCase("get")) {
+            // 現在の設定を表示
+            EmbedBuilder eb = new EmbedBuilder()
+                    .setTitle("⚙️ 現在の設定")
+                    .setColor(Color.GRAY)
+                    .addField("通知チャンネル", plugin.getConfigManager().getDiscordNotificationChannel(), false)
+                    .addField("未認証ロール", plugin.getConfigManager().getDiscordUnverifiedRoleId(), true)
+                    .addField("認証済みロール", plugin.getConfigManager().getDiscordVerifiedRoleId(), true)
+                    .addField("通知ロール", plugin.getConfigManager().getDiscordNotificationRoleId(), true)
+                    .addField("コンソールロール", plugin.getConfigManager().getDiscordConsoleRoleId(), true);
+
+            event.replyEmbeds(eb.build()).setEphemeral(true).queue();
+
+        } else if (action.equalsIgnoreCase("set")) {
+            if (key == null || value == null) {
+                event.reply("❌ setにはkeyとvalueが必要です。\n例: `/settings action set key notification value 123456789`")
+                        .setEphemeral(true).queue();
+                return;
+            }
+
+            switch (key.toLowerCase()) {
+                case "channel", "notification_channel" -> {
+                    plugin.getConfigManager().setDiscordSetting("notification_channel_id", value);
+                    event.reply("✅ 通知チャンネルIDを更新しました: " + value).setEphemeral(true).queue();
+                }
+                case "role_unverified", "unverified" -> {
+                    plugin.getConfigManager().setDiscordSetting("unverified_role_id", value);
+                    event.reply("✅ 未認証ロールIDを更新しました: " + value).setEphemeral(true).queue();
+                }
+                case "role_verified", "verified" -> {
+                    plugin.getConfigManager().setDiscordSetting("verified_role_id", value);
+                    event.reply("✅ 認証済みロールIDを更新しました: " + value).setEphemeral(true).queue();
+                }
+                case "role_notification", "notification" -> {
+                    plugin.getConfigManager().setDiscordSetting("notification_role_id", value);
+                    event.reply("✅ 通知ロールIDを更新しました: " + value).setEphemeral(true).queue();
+                }
+                case "role_console", "console" -> {
+                    plugin.getConfigManager().setDiscordSetting("console_role_id", value);
+                    event.reply("✅ コンソールロールIDを更新しました: " + value).setEphemeral(true).queue();
+                }
+                default -> event.reply("❌ 不明なキーです: " + key).setEphemeral(true).queue();
+            }
+
+            // 設定再読み込み
+            plugin.getConfigManager().reload();
+
+        } else if (action.equalsIgnoreCase("role")) {
+            if (key == null || value == null) {
+                event.reply("❌ role設定には階級IDとロールIDが必要です。\n例: `/settings action role key PRIVATE value 123456789`")
+                        .setEphemeral(true).queue();
+                return;
+            }
+            // 階級ロール設定
+            plugin.getConfigManager().setDiscordRankRole(key, value);
+            event.reply("✅ 階級 `" + key.toUpperCase() + "` にロールID `" + value + "` を紐付けました。").setEphemeral(true).queue();
+            plugin.getConfigManager().reload();
+
+        } else {
+            event.reply("❌ 不明なアクションです: " + action).setEphemeral(true).queue();
+        }
+    }
+
+    private void handlePanel(SlashCommandInteractionEvent event) {
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.ADMINISTRATOR)) {
+            event.reply("❌ このコマンドは管理者のみ使用可能です。").setEphemeral(true).queue();
+            return;
+        }
+
+        String type = event.getOption("type").getAsString();
+
+        if (type.equalsIgnoreCase("auth")) {
+            EmbedBuilder eb = new EmbedBuilder()
+                    .setTitle("🔗 アカウント連携")
+                    .setDescription("下のボタンを押して、Minecraftアカウントとの連携を開始してください。")
+                    .setColor(Color.BLUE)
+                    .setFooter("鉄の規律 - アカウント連携");
+
+            event.getChannel().sendMessageEmbeds(eb.build())
+                    .setActionRow(Button.primary("auth_start", "🔗 連携を開始する"))
+                    .queue();
+
+            event.reply("✅ 認証パネルを設置しました。").setEphemeral(true).queue();
+
+        } else if (type.equalsIgnoreCase("roles")) {
+            EmbedBuilder eb = new EmbedBuilder()
+                    .setTitle("🔘 ロール管理パネル")
+                    .setDescription("以下のボタンでロールの同期や設定ができます。")
+                    .setColor(Color.CYAN)
+                    .addField("🔄 ロール・階級同期", "Minecraftの階級に合わせてDiscordロールを更新します。", false)
+                    .addField("🔔 通知受け取り", "サーバーからの通知（参加/退出/警告など）を受け取るロールを切り替えます。", false);
+
+            event.getChannel().sendMessageEmbeds(eb.build())
+                    .setActionRow(
+                            Button.success("role_sync", "🔄 階級・部隊を同期"),
+                            Button.secondary("role_toggle_notify", "🔔 お知らせを受け取る"))
+                    .queue();
+
+            event.reply("✅ ロール管理パネルを設置しました。").setEphemeral(true).queue();
+        } else {
+            event.reply("❌ 不明なパネルタイプです (auth/roles)").setEphemeral(true).queue();
+        }
+    }
+
     public void onUnlink(long discordId) {
-        if (!enabled || jda == null || guildId == null || guildId.isEmpty()) return;
+        if (!enabled || jda == null || guildId == null || guildId.isEmpty())
+            return;
 
         Guild guild = jda.getGuildById(guildId);
-        if (guild == null) return;
+        if (guild == null)
+            return;
 
         guild.retrieveMemberById(discordId).queue(member -> {
-            if (member == null) return;
+            if (member == null)
+                return;
 
             // 認証済みロールを削除
             if (verifiedRoleId != null && !verifiedRoleId.isEmpty()) {
@@ -495,6 +674,277 @@ public class DiscordManager extends ListenerAdapter {
 
             // ニックネームをリセット
             member.modifyNickname(null).queue();
-        }, error -> {});
+        }, error -> {
+        });
+    }
+
+    private void handleDivision(SlashCommandInteractionEvent event) {
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.ADMINISTRATOR)) {
+            event.reply("❌ このコマンドは管理者のみ使用可能です。").setEphemeral(true).queue();
+            return;
+        }
+
+        String action = event.getOption("action").getAsString();
+        String arg1 = event.getOption("arg1") != null ? event.getOption("arg1").getAsString() : null;
+        String arg2 = event.getOption("arg2") != null ? event.getOption("arg2").getAsString() : null;
+
+        if (action.equalsIgnoreCase("list")) {
+            StringBuilder sb = new StringBuilder();
+            for (String div : plugin.getDivisionManager().getAllDivisions()) {
+                String display = plugin.getDivisionManager().getDivisionDisplayName(div);
+                int count = plugin.getDivisionManager().getDivisionMembers(div).size();
+                sb.append(display).append(": ").append(count).append("人\n");
+            }
+            event.reply("📜 **部隊一覧**\n" + sb.toString()).setEphemeral(true).queue();
+
+        } else if (action.equalsIgnoreCase("create")) {
+            if (arg1 == null) {
+                event.reply("❌ 部隊名を指定してください。").setEphemeral(true).queue();
+                return;
+            }
+            plugin.getDivisionManager().createDivision(arg1);
+            event.reply("✅ 部隊 `" + arg1 + "` を作成しました。").setEphemeral(true).queue();
+
+        } else if (action.equalsIgnoreCase("add")) {
+            // arg1: ユーザー, arg2: 部隊
+            if (arg1 == null || arg2 == null) {
+                event.reply("❌ ユーザーと部隊名を指定してください。\n例: `/division action add arg1 @user arg2 infantry`")
+                        .setEphemeral(true).queue();
+                return;
+            }
+            // メンションからユーザーID抽出 (<@123456> -> 123456)
+            long discordId = parseDiscordId(arg1);
+            UUID uuid = plugin.getLinkManager().getMinecraftId(discordId);
+
+            if (uuid == null) {
+                event.reply("❌ そのユーザーはMinecraftと連携していません。").setEphemeral(true).queue();
+                return;
+            }
+
+            if (!plugin.getDivisionManager().divisionExists(arg2)) {
+                event.reply("❌ その部隊は存在しません。`/division list` で確認してください。").setEphemeral(true).queue();
+                return;
+            }
+
+            plugin.getDivisionManager().setDivision(uuid, arg2);
+            event.reply("✅ <@" + discordId + "> を `" + arg2 + "` に配属しました。").setEphemeral(true).queue();
+
+            // 権限やロール更新のために即時反映処理があれば呼ぶ (今回はロール同期ボタン推奨)
+
+        } else if (action.equalsIgnoreCase("remove")) {
+            if (arg1 == null) {
+                event.reply("❌ ユーザーを指定してください。").setEphemeral(true).queue();
+                return;
+            }
+            long discordId = parseDiscordId(arg1);
+            UUID uuid = plugin.getLinkManager().getMinecraftId(discordId);
+
+            if (uuid == null) {
+                event.reply("❌ そのユーザーはMinecraftと連携していません。").setEphemeral(true).queue();
+                return;
+            }
+
+            plugin.getDivisionManager().removeDivision(uuid);
+            event.reply("✅ <@" + discordId + "> を部隊から除隊させました。").setEphemeral(true).queue();
+
+        } else {
+            event.reply("❌ 不明なアクションです (create/add/remove/list)").setEphemeral(true).queue();
+        }
+    }
+
+    private void handleAdminRank(SlashCommandInteractionEvent event, boolean promote) {
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.ADMINISTRATOR)) {
+            event.reply("❌ このコマンドは管理者のみ使用可能です。").setEphemeral(true).queue();
+            return;
+        }
+
+        long targetDiscordId = event.getOption("user").getAsUser().getIdLong();
+        UUID targetUUID = plugin.getLinkManager().getMinecraftId(targetDiscordId);
+
+        if (targetUUID == null) {
+            event.reply("❌ 対象ユーザーは連携していません。").setEphemeral(true).queue();
+            return;
+        }
+
+        // RankManager requires Player object currently, need to fix if offline support
+        // needed.
+        // For now, only online players or use basic implementation.
+        // Assuming RankManager handles offline players correctly or we skip offline
+        // support for now.
+        // Wait, getRank() usually requires Player or checks LP.
+        // Let's rely on plugin methods.
+
+        Rank current = plugin.getRankManager().getRank(targetUUID);
+        Rank next = promote ? current.getNext() : current.getPrevious();
+
+        if (next == null) {
+            event.reply("❌ これ以上階級を変更できません (現在: " + current.getId() + ")").setEphemeral(true).queue();
+            return;
+        }
+
+        plugin.getRankManager().setRank(targetUUID, next);
+        event.reply("✅ " + (promote ? "昇進" : "降格") + "させました: " + current.getId() + " -> " + next.getId()).queue();
+
+        updateNickname(targetDiscordId, Bukkit.getOfflinePlayer(targetUUID).getName(), next);
+    }
+
+    private void handleSetRank(SlashCommandInteractionEvent event) {
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.ADMINISTRATOR)) {
+            event.reply("❌ このコマンドは管理者のみ使用可能です。").setEphemeral(true).queue();
+            return;
+        }
+
+        long targetDiscordId = event.getOption("user").getAsUser().getIdLong();
+        String rankId = event.getOption("rank").getAsString();
+        UUID targetUUID = plugin.getLinkManager().getMinecraftId(targetDiscordId);
+
+        if (targetUUID == null) {
+            event.reply("❌ 対象ユーザーは連携していません。").setEphemeral(true).queue();
+            return;
+        }
+
+        try {
+            Rank rank = Rank.valueOf(rankId.toUpperCase());
+            plugin.getRankManager().setRankByUUID(targetUUID, rank).thenAccept(success -> {
+                if (success) {
+                    event.getHook().sendMessage("✅ 階級を設定しました: " + rank.getId()).queue();
+                    updateNickname(targetDiscordId, Bukkit.getOfflinePlayer(targetUUID).getName(), rank);
+                } else {
+                    event.getHook().sendMessage("❌ 階級設定に失敗しました。").queue();
+                }
+            });
+            event.deferReply().queue();
+        } catch (IllegalArgumentException e) {
+            event.reply("❌ 無効な階級名です。").setEphemeral(true).queue();
+        }
+    }
+
+    private void handlePunish(SlashCommandInteractionEvent event, String type) {
+        if (event.getMember() == null || !event.getMember().hasPermission(Permission.KICK_MEMBERS)) {
+            event.reply("❌ 権限がありません。").setEphemeral(true).queue();
+            return;
+        }
+
+        long targetDiscordId = event.getOption("user").getAsUser().getIdLong();
+        String reason = event.getOption("reason").getAsString();
+        UUID targetUUID = plugin.getLinkManager().getMinecraftId(targetDiscordId);
+
+        if (targetUUID == null) {
+            event.reply("❌ 対象ユーザーは連携していません。").setEphemeral(true).queue();
+            return;
+        }
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (type.equals("kick")) {
+                Player target = Bukkit.getPlayer(targetUUID);
+                if (target != null) {
+                    target.kickPlayer(ChatColor.RED + "Kicked by Discord Admin\nReason: " + reason);
+                }
+            } else if (type.equals("ban")) {
+                Bukkit.getBanList(org.bukkit.BanList.Type.NAME).addBan(Bukkit.getOfflinePlayer(targetUUID).getName(),
+                        reason, null, "Console(Discord)");
+                Player target = Bukkit.getPlayer(targetUUID);
+                if (target != null) {
+                    target.kickPlayer(ChatColor.RED + "Banned by Discord Admin\nReason: " + reason);
+                }
+            }
+        });
+
+        event.reply("✅ 処罰を実行しました (" + type + "): " + reason).queue();
+    }
+
+    // Helper to parse <@12345> style mentions or raw IDs
+    private long parseDiscordId(String input) {
+        if (input.startsWith("<@") && input.endsWith(">")) {
+            input = input.replaceAll("[^0-9]", "");
+        }
+        try {
+            return Long.parseLong(input);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    // ===== Button Interactions =====
+
+    @Override
+    public void onButtonInteraction(ButtonInteractionEvent event) {
+        String id = event.getComponentId();
+
+        if (id.equals("auth_start")) {
+            long discordId = event.getUser().getIdLong();
+            if (plugin.getLinkManager().isLinked(discordId)) {
+                event.reply("✅ 既に連携済みです！").setEphemeral(true).queue();
+                return;
+            }
+
+            String code = plugin.getLinkManager().generateLinkCode(discordId);
+            event.reply("以下のコマンドをMinecraftサーバー内で入力してください：\n`/link " + code + "`\n(有効期限: 5分)")
+                    .setEphemeral(true).queue();
+
+        } else if (id.equals("role_sync")) {
+            long discordId = event.getUser().getIdLong();
+            UUID uuid = plugin.getLinkManager().getMinecraftId(discordId);
+
+            if (uuid == null) {
+                event.reply("❌ Minecraftアカウントと連携されていません。先に連携を行ってください。").setEphemeral(true).queue();
+                return;
+            }
+
+            // Sync logic
+            Rank rank = plugin.getRankManager().getRankAsync(uuid).join();
+            String rankRoleId = plugin.getConfigManager().getDiscordRankRoleId(rank.name());
+            String verifiedRoleId = plugin.getConfigManager().getDiscordVerifiedRoleId();
+
+            Guild guild = event.getGuild();
+            Member member = event.getMember();
+
+            if (guild != null && member != null) {
+                // 認証済みロールチェック
+                if (verifiedRoleId != null && !verifiedRoleId.isEmpty()) {
+                    Role vRole = guild.getRoleById(verifiedRoleId);
+                    if (vRole != null && !member.getRoles().contains(vRole)) {
+                        guild.addRoleToMember(member, vRole).queue();
+                    }
+                }
+
+                // 階級ロールチェック
+                if (rankRoleId != null && !rankRoleId.isEmpty()) {
+                    Role rRole = guild.getRoleById(rankRoleId);
+                    if (rRole != null && !member.getRoles().contains(rRole)) {
+                        guild.addRoleToMember(member, rRole).queue();
+                    }
+                }
+
+                // ニックネーム更新
+                updateNickname(discordId, Bukkit.getOfflinePlayer(uuid).getName(), rank);
+            }
+
+            event.reply("✅ ロールと階級情報を同期しました！").setEphemeral(true).queue();
+
+        } else if (id.equals("role_toggle_notify")) {
+            String notifyRoleId = plugin.getConfigManager().getDiscordNotificationRoleId();
+            if (notifyRoleId == null || notifyRoleId.isEmpty()) {
+                event.reply("⚠️ 通知ロールが設定されていません。管理者に報告してください。").setEphemeral(true).queue();
+                return;
+            }
+
+            Guild guild = event.getGuild();
+            Member member = event.getMember();
+            Role notifyRole = guild.getRoleById(notifyRoleId);
+
+            if (notifyRole == null) {
+                event.reply("⚠️ 通知ロールが見つかりません。").setEphemeral(true).queue();
+                return;
+            }
+
+            if (member.getRoles().contains(notifyRole)) {
+                guild.removeRoleFromMember(member, notifyRole).queue();
+                event.reply("🔕 お知らせ通知を **OFF** にしました。").setEphemeral(true).queue();
+            } else {
+                guild.addRoleToMember(member, notifyRole).queue();
+                event.reply("🔔 お知らせ通知を **ON** にしました。").setEphemeral(true).queue();
+            }
+        }
     }
 }

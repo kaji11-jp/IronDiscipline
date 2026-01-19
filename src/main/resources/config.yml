@@ -147,3 +147,9 @@ discord:
   unverified_role_id: ""
   # 認証済みロールID (連携完了時に付与)
   verified_role_id: ""
+  # 通知を受け取るロールID
+  notification_role_id: ""
+  # コンソール・管理者権限を持つロールID
+  console_role_id: ""
+  # 階級別ロール設定 (階級ID: ロールID)
+  rank_roles: {}
