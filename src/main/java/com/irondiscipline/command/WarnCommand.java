@@ -3,6 +3,7 @@ package com.irondiscipline.command;
 import com.irondiscipline.IronDiscipline;
 import com.irondiscipline.manager.WarningManager;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -26,14 +27,14 @@ public class WarnCommand implements CommandExecutor, TabCompleter {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         String cmdName = command.getName().toLowerCase();
-        
+
         switch (cmdName) {
             case "warn" -> handleWarn(sender, args);
             case "warnings" -> handleWarnings(sender, args);
             case "clearwarnings" -> handleClearWarnings(sender, args);
             case "unwarn" -> handleUnwarn(sender, args);
         }
-        
+
         return true;
     }
 
@@ -42,37 +43,45 @@ public class WarnCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage("§c使用法: /warn <プレイヤー> <理由>");
             return;
         }
-        
-        Player target = Bukkit.getPlayer(args[0]);
+
+        OfflinePlayer target = Bukkit.getPlayer(args[0]);
         if (target == null) {
-            sender.sendMessage("§cプレイヤーが見つかりません");
-            return;
+            // オフライン検索
+            target = Bukkit.getOfflinePlayer(args[0]);
+            if (!target.hasPlayedBefore() && !target.isOnline()) {
+                sender.sendMessage("§cプレイヤーが見つかりません (未参加の可能性)");
+                return;
+            }
         }
-        
+
         // 権限チェック（憲兵 or 少尉以上）
         if (!canWarn(sender, target)) {
             return;
         }
-        
+
         // 理由を結合
         StringBuilder reason = new StringBuilder();
         for (int i = 1; i < args.length; i++) {
-            if (i > 1) reason.append(" ");
+            if (i > 1)
+                reason.append(" ");
             reason.append(args[i]);
         }
-        
+
         // 警告追加
         int count = plugin.getWarningManager().addWarning(
-            target.getUniqueId(),
-            target.getName(),
-            reason.toString(),
-            sender instanceof Player ? ((Player) sender).getUniqueId() : null
-        );
-        
+                target.getUniqueId(),
+                target.getName(),
+                reason.toString(),
+                sender instanceof Player ? ((Player) sender).getUniqueId() : null);
+
+        // 通知
         // 通知
         sender.sendMessage("§a" + target.getName() + " に警告を与えた（" + count + "回目）");
-        target.sendMessage("§c§l【警告】§r§c " + reason + " §7(警告" + count + "回目)");
-        
+
+        if (target.isOnline() && target.getPlayer() != null) {
+            target.getPlayer().sendMessage("§c§l【警告】§r§c " + reason + " §7(警告" + count + "回目)");
+        }
+
         // 自動処分の通知
         if (count >= 5) {
             sender.sendMessage("§c" + target.getName() + " は警告5回でキックされた");
@@ -95,14 +104,14 @@ public class WarnCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage("§cプレイヤーを指定してください");
             return;
         }
-        
+
         List<WarningManager.Warning> warnings = plugin.getWarningManager().getWarnings(target.getUniqueId());
-        
+
         if (warnings.isEmpty()) {
             sender.sendMessage("§a" + target.getName() + " には警告がありません");
             return;
         }
-        
+
         sender.sendMessage("§6=== " + target.getName() + " の警告履歴 (" + warnings.size() + "件) ===");
         int i = 1;
         for (WarningManager.Warning w : warnings) {
@@ -116,13 +125,13 @@ public class WarnCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage("§c使用法: /clearwarnings <プレイヤー>");
             return;
         }
-        
+
         Player target = Bukkit.getPlayer(args[0]);
         if (target == null) {
             sender.sendMessage("§cプレイヤーが見つかりません");
             return;
         }
-        
+
         plugin.getWarningManager().clearWarnings(target.getUniqueId());
         sender.sendMessage("§a" + target.getName() + " の警告をすべて削除した");
     }
@@ -132,13 +141,13 @@ public class WarnCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage("§c使用法: /unwarn <プレイヤー>");
             return;
         }
-        
+
         Player target = Bukkit.getPlayer(args[0]);
         if (target == null) {
             sender.sendMessage("§cプレイヤーが見つかりません");
             return;
         }
-        
+
         if (plugin.getWarningManager().removeLastWarning(target.getUniqueId())) {
             sender.sendMessage("§a" + target.getName() + " の最新の警告を削除した");
         } else {
@@ -146,30 +155,36 @@ public class WarnCommand implements CommandExecutor, TabCompleter {
         }
     }
 
-    private boolean canWarn(CommandSender sender, Player target) {
+    private boolean canWarn(CommandSender sender, OfflinePlayer target) {
         if (!(sender instanceof Player executor)) {
             return true; // コンソール
         }
-        
+
         // 憲兵チェック
         if (plugin.getDivisionManager().isMP(executor)) {
             // 憲兵は士官未満のみ
-            if (plugin.getRankManager().getRank(target).getWeight() >= 
-                com.irondiscipline.model.Rank.LIEUTENANT.getWeight()) {
-                sender.sendMessage("§c憲兵は士官を警告できません");
-                return false;
+            if (target instanceof Player) {
+                if (plugin.getRankManager().getRank((Player) target)
+                        .getWeight() >= com.irondiscipline.model.Rank.LIEUTENANT
+                                .getWeight()) {
+                    sender.sendMessage("§c憲兵は士官を警告できません");
+                    return false;
+                }
             }
             return true;
         }
-        
-        // 通常の階級チェック
-        return plugin.getRankUtil().checkAll(sender, target);
+
+        // 通常の階級チェック (オンライン時のみ厳密チェック、オフラインは一旦許可)
+        if (target instanceof Player) {
+            return plugin.getRankUtil().checkAll(sender, (Player) target);
+        }
+        return true;
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> completions = new ArrayList<>();
-        
+
         if (args.length == 1) {
             for (Player p : Bukkit.getOnlinePlayers()) {
                 if (p.getName().toLowerCase().startsWith(args[0].toLowerCase())) {
@@ -177,7 +192,7 @@ public class WarnCommand implements CommandExecutor, TabCompleter {
                 }
             }
         }
-        
+
         return completions;
     }
 }

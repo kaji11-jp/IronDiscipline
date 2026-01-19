@@ -91,6 +91,12 @@ killlog:
   # 詳細ログの有効化
   detailed: true
 
+# 警告による自動処分
+warnings:
+  thresholds:
+    jail: 3
+    kick: 5
+
 # メッセージ設定
 messages:
   prefix: "&8[&c鉄の規律&8] "

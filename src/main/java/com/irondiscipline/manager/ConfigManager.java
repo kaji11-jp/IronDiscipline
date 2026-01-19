@@ -140,6 +140,16 @@ public class ConfigManager {
         return colorize(config.getString("messages.prefix", "&8[&c鉄の規律&8] "));
     }
 
+    // ===== Warnings =====
+
+    public int getWarningJailThreshold() {
+        return config.getInt("warnings.thresholds.jail", 3);
+    }
+
+    public int getWarningKickThreshold() {
+        return config.getInt("warnings.thresholds.kick", 5);
+    }
+
     public String getMessage(String key) {
         String message = config.getString("messages." + key, key);
         return getPrefix() + colorize(message);

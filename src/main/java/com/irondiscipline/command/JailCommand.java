@@ -41,7 +41,7 @@ public class JailCommand implements CommandExecutor, TabCompleter {
 
         if (target == null) {
             sender.sendMessage(plugin.getConfigManager().getMessage("player_not_found",
-                "%player%", targetName));
+                    "%player%", targetName));
             return true;
         }
 
@@ -56,7 +56,8 @@ public class JailCommand implements CommandExecutor, TabCompleter {
         if (args.length >= 2) {
             StringBuilder sb = new StringBuilder();
             for (int i = 1; i < args.length; i++) {
-                if (i > 1) sb.append(" ");
+                if (i > 1)
+                    sb.append(" ");
                 sb.append(args[i]);
             }
             reason = sb.toString();
@@ -64,12 +65,25 @@ public class JailCommand implements CommandExecutor, TabCompleter {
 
         // 隔離実行
         Player jailer = (sender instanceof Player) ? (Player) sender : null;
-        boolean success = plugin.getJailManager().jail(target, jailer, reason);
+        boolean success;
+
+        if (target != null) {
+            success = plugin.getJailManager().jail(target, jailer, reason);
+        } else {
+            // オフラインプレイヤー
+            org.bukkit.OfflinePlayer offlineTarget = Bukkit.getOfflinePlayer(targetName);
+            if (!offlineTarget.hasPlayedBefore() && !offlineTarget.isOnline()) {
+                sender.sendMessage("§cプレイヤーが見つかりません (未参加の可能性)");
+                return true;
+            }
+            success = plugin.getJailManager().jailOffline(offlineTarget.getUniqueId(), offlineTarget.getName(),
+                    jailer != null ? jailer.getUniqueId() : null, reason);
+        }
 
         if (success) {
             sender.sendMessage(plugin.getConfigManager().getMessage("jail_sent",
-                "%player%", target.getName(),
-                "%reason%", reason));
+                    "%player%", target != null ? target.getName() : targetName,
+                    "%reason%", reason));
         } else {
             sender.sendMessage("§c隔離に失敗した。既に隔離中か、設定エラーの可能性ある。");
         }

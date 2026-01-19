@@ -7,7 +7,7 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.HashMap;
+import com.irondiscipline.util.InventoryUtil;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,13 +19,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class JailManager {
 
     private final IronDiscipline plugin;
-    
-    // 隔離中プレイヤー
+
+    // 隔離中プレイヤー (キャッシュ)
     private final Map<UUID, JailData> jailedPlayers = new ConcurrentHashMap<>();
-    
-    // インベントリバックアップ
-    private final Map<UUID, ItemStack[]> inventoryBackups = new HashMap<>();
-    private final Map<UUID, ItemStack[]> armorBackups = new HashMap<>();
 
     public JailManager(IronDiscipline plugin) {
         this.plugin = plugin;
@@ -40,45 +36,65 @@ public class JailManager {
         if (jailLocation == null) {
             return false;
         }
-        
+
         UUID targetId = target.getUniqueId();
-        
+
         // 既に隔離中なら何もしない
         if (isJailed(target)) {
             return false;
         }
-        
+
         // 現在位置を保存
         Location originalLocation = target.getLocation();
         String locString = serializeLocation(originalLocation);
-        
-        // インベントリバックアップ
-        inventoryBackups.put(targetId, target.getInventory().getContents().clone());
-        armorBackups.put(targetId, target.getInventory().getArmorContents().clone());
-        
+
+        // インベントリバックアップ (Base64)
+        String invBackup = InventoryUtil.toBase64(target.getInventory().getContents());
+        String armorBackup = InventoryUtil.toBase64(target.getInventory().getArmorContents());
+
         // インベントリクリア
         target.getInventory().clear();
         target.getInventory().setArmorContents(new ItemStack[4]);
-        
+
         // ゲームモードをアドベンチャーに（ブロック破壊防止）
         target.setGameMode(GameMode.ADVENTURE);
-        
+
         // 隔離場所へテレポート
         target.teleport(jailLocation);
-        
-        // データ保存
-        JailData data = new JailData(targetId, target.getName(), reason, 
-            System.currentTimeMillis(), jailer != null ? jailer.getUniqueId() : null, locString);
+
+        // データ保存 (キャッシュ)
+        JailData data = new JailData(targetId, target.getName(), reason,
+                System.currentTimeMillis(), jailer != null ? jailer.getUniqueId() : null, locString);
         jailedPlayers.put(targetId, data);
-        
-        // DB保存
+
+        // DB保存 (インベントリ含む)
         plugin.getStorageManager().saveJailedPlayer(targetId, target.getName(), reason,
-            jailer != null ? jailer.getUniqueId() : null, locString);
-        
+                jailer != null ? jailer.getUniqueId() : null, locString, invBackup, armorBackup);
+
         // 通知
         target.sendMessage(plugin.getConfigManager().getMessage("jail_you_jailed",
-            "%reason%", reason != null ? reason : "理由なし"));
-        
+                "%reason%", reason != null ? reason : "理由なし"));
+
+        return true;
+    }
+
+    /**
+     * オフラインプレイヤーを隔離 (DBのみ更新)
+     */
+    public boolean jailOffline(UUID targetId, String targetName, UUID jailerId, String reason) {
+        if (isJailed(targetId)) {
+            return false;
+        }
+
+        // DB保存 (インベントリバックアップはnull = ログイン時にバックアップ)
+        plugin.getStorageManager().saveJailedPlayer(targetId, targetName, reason,
+                jailerId, null, null, null);
+
+        // キャッシュ更新 (一応)
+        JailData data = new JailData(targetId, targetName, reason,
+                System.currentTimeMillis(), jailerId, null);
+        jailedPlayers.put(targetId, data);
+
         return true;
     }
 
@@ -87,13 +103,13 @@ public class JailManager {
      */
     public boolean unjail(Player target) {
         UUID targetId = target.getUniqueId();
-        
+
         if (!isJailed(target)) {
             return false;
         }
-        
+
         JailData data = jailedPlayers.remove(targetId);
-        
+
         // 元の場所へテレポート
         if (data != null && data.originalLocation != null) {
             Location original = deserializeLocation(data.originalLocation);
@@ -101,24 +117,34 @@ public class JailManager {
                 target.teleport(original);
             }
         }
-        
+
         // ゲームモード復元
         target.setGameMode(GameMode.SURVIVAL);
-        
-        // インベントリ復元
-        if (inventoryBackups.containsKey(targetId)) {
-            target.getInventory().setContents(inventoryBackups.remove(targetId));
+
+        // インベントリ復元 (DBから)
+        String invData = plugin.getStorageManager().getInventoryBackup(targetId);
+        String armorData = plugin.getStorageManager().getArmorBackup(targetId);
+
+        if (invData != null) {
+            ItemStack[] items = InventoryUtil.fromBase64(invData);
+            if (items != null) {
+                target.getInventory().setContents(items);
+            }
         }
-        if (armorBackups.containsKey(targetId)) {
-            target.getInventory().setArmorContents(armorBackups.remove(targetId));
+
+        if (armorData != null) {
+            ItemStack[] armor = InventoryUtil.fromBase64(armorData);
+            if (armor != null) {
+                target.getInventory().setArmorContents(armor);
+            }
         }
-        
+
         // DB削除
         plugin.getStorageManager().removeJailedPlayer(targetId);
-        
+
         // 通知
         target.sendMessage(plugin.getConfigManager().getMessage("jail_you_released"));
-        
+
         return true;
     }
 
@@ -141,10 +167,36 @@ public class JailManager {
      */
     public void onPlayerJoin(Player player) {
         if (plugin.getStorageManager().isJailed(player.getUniqueId())) {
+            UUID playerId = player.getUniqueId();
+
+            // DBからバックアップ状況を確認
+            String invBackup = plugin.getStorageManager().getInventoryBackup(playerId);
+
+            // バックアップがない場合（オフライン処罰時）は今すぐバックアップ
+            if (invBackup == null) {
+                // インベントリバックアップ
+                String newInvBackup = InventoryUtil.toBase64(player.getInventory().getContents());
+                String newArmorBackup = InventoryUtil.toBase64(player.getInventory().getArmorContents());
+
+                // 元の場所保存
+                String locString = serializeLocation(player.getLocation());
+
+                // DB更新
+                plugin.getStorageManager().saveJailedPlayer(playerId, player.getName(), "Offline Jail",
+                        null, locString, newInvBackup, newArmorBackup);
+
+                // インベントリクリア
+                player.getInventory().clear();
+                player.getInventory().setArmorContents(new ItemStack[4]);
+            }
+
             // DBに隔離記録がある場合
-            jailedPlayers.put(player.getUniqueId(), 
-                new JailData(player.getUniqueId(), player.getName(), null, 0, null, null));
-            
+            // キャッシュ復元
+            if (!jailedPlayers.containsKey(playerId)) {
+                jailedPlayers.put(playerId,
+                        new JailData(playerId, player.getName(), "再接続", System.currentTimeMillis(), null, null));
+            }
+
             // 隔離場所にテレポート
             Location jailLocation = plugin.getConfigManager().getJailLocation();
             if (jailLocation != null) {
@@ -152,7 +204,7 @@ public class JailManager {
                     player.teleport(jailLocation);
                     player.setGameMode(GameMode.ADVENTURE);
                     player.sendMessage(plugin.getConfigManager().getMessage("jail_you_jailed",
-                        "%reason%", "拘留中のため再配置"));
+                            "%reason%", "拘留中のため再配置"));
                 }, 20L);
             }
         }
@@ -162,8 +214,9 @@ public class JailManager {
      * プレイヤーが隔離場所から逃げようとした時の処理
      */
     public void preventEscape(Player player) {
-        if (!isJailed(player)) return;
-        
+        if (!isJailed(player))
+            return;
+
         Location jailLocation = plugin.getConfigManager().getJailLocation();
         if (jailLocation != null) {
             // 隔離場所から離れすぎていたら戻す
@@ -196,9 +249,9 @@ public class JailManager {
      * 位置のシリアライズ
      */
     private String serializeLocation(Location loc) {
-        return loc.getWorld().getName() + ";" + 
-               loc.getX() + ";" + loc.getY() + ";" + loc.getZ() + ";" +
-               loc.getYaw() + ";" + loc.getPitch();
+        return loc.getWorld().getName() + ";" +
+                loc.getX() + ";" + loc.getY() + ";" + loc.getZ() + ";" +
+                loc.getYaw() + ";" + loc.getPitch();
     }
 
     /**
@@ -208,13 +261,12 @@ public class JailManager {
         try {
             String[] parts = str.split(";");
             return new Location(
-                Bukkit.getWorld(parts[0]),
-                Double.parseDouble(parts[1]),
-                Double.parseDouble(parts[2]),
-                Double.parseDouble(parts[3]),
-                Float.parseFloat(parts[4]),
-                Float.parseFloat(parts[5])
-            );
+                    Bukkit.getWorld(parts[0]),
+                    Double.parseDouble(parts[1]),
+                    Double.parseDouble(parts[2]),
+                    Double.parseDouble(parts[3]),
+                    Float.parseFloat(parts[4]),
+                    Float.parseFloat(parts[5]));
         } catch (Exception e) {
             return null;
         }
@@ -231,8 +283,8 @@ public class JailManager {
         final UUID jailedBy;
         final String originalLocation;
 
-        JailData(UUID playerId, String playerName, String reason, 
-                 long jailedAt, UUID jailedBy, String originalLocation) {
+        JailData(UUID playerId, String playerName, String reason,
+                long jailedAt, UUID jailedBy, String originalLocation) {
             this.playerId = playerId;
             this.playerName = playerName;
             this.reason = reason;

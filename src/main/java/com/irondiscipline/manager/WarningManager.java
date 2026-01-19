@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 警告マネージャー
@@ -19,14 +20,10 @@ public class WarningManager {
 
     private final IronDiscipline plugin;
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
-    
+
     // プレイヤー -> 警告リスト
     private final Map<UUID, List<Warning>> warnings = new ConcurrentHashMap<>();
-    
-    // 設定値
-    private int jailThreshold = 3;
-    private int kickThreshold = 5;
-    
+
     private File dataFile;
 
     public WarningManager(IronDiscipline plugin) {
@@ -39,34 +36,37 @@ public class WarningManager {
      * 警告を追加
      */
     public int addWarning(UUID playerId, String playerName, String reason, UUID warnedBy) {
-        List<Warning> playerWarnings = warnings.computeIfAbsent(playerId, k -> new ArrayList<>());
-        
+        List<Warning> playerWarnings = warnings.computeIfAbsent(playerId, k -> new CopyOnWriteArrayList<>());
+
         Warning warning = new Warning();
         warning.reason = reason;
         warning.warnedBy = warnedBy != null ? warnedBy.toString() : "CONSOLE";
         warning.timestamp = System.currentTimeMillis();
-        
+
         playerWarnings.add(warning);
         saveData();
-        
+
         int count = playerWarnings.size();
-        
+
         // 自動処分
         Player target = Bukkit.getPlayer(playerId);
+        int kickLimit = plugin.getConfigManager().getWarningKickThreshold();
+        int jailLimit = plugin.getConfigManager().getWarningJailThreshold();
+
         if (target != null && target.isOnline()) {
-            if (count >= kickThreshold) {
-                // 5回以上 → キック
+            if (count >= kickLimit) {
+                // キック
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    target.kickPlayer("§c警告が" + kickThreshold + "回に達したため、キックされました。");
+                    target.kickPlayer("§c警告が" + kickLimit + "回に達したため、キックされました。");
                 });
-            } else if (count >= jailThreshold) {
-                // 3回以上 → 隔離
+            } else if (count >= jailLimit) {
+                // 隔離
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     plugin.getJailManager().jail(target, null, "警告" + count + "回による自動隔離");
                 });
             }
         }
-        
+
         return count;
     }
 
@@ -119,7 +119,7 @@ public class WarningManager {
                 for (Map.Entry<UUID, List<Warning>> entry : warnings.entrySet()) {
                     data.put(entry.getKey().toString(), entry.getValue());
                 }
-                
+
                 try (Writer writer = new FileWriter(dataFile)) {
                     gson.toJson(data, writer);
                 }
@@ -136,16 +136,18 @@ public class WarningManager {
         if (!dataFile.exists()) {
             return;
         }
-        
+
         try (Reader reader = new FileReader(dataFile)) {
-            java.lang.reflect.Type type = new com.google.gson.reflect.TypeToken<Map<String, List<Warning>>>(){}.getType();
+            java.lang.reflect.Type type = new com.google.gson.reflect.TypeToken<Map<String, List<Warning>>>() {
+            }.getType();
             Map<String, List<Warning>> data = gson.fromJson(reader, type);
             if (data != null) {
                 for (Map.Entry<String, List<Warning>> entry : data.entrySet()) {
                     try {
                         UUID uuid = UUID.fromString(entry.getKey());
-                        warnings.put(uuid, new ArrayList<>(entry.getValue()));
-                    } catch (IllegalArgumentException ignored) {}
+                        warnings.put(uuid, new CopyOnWriteArrayList<>(entry.getValue()));
+                    } catch (IllegalArgumentException ignored) {
+                    }
                 }
             }
             plugin.getLogger().info("警告データ読み込み完了");
@@ -161,7 +163,7 @@ public class WarningManager {
         public String reason;
         public String warnedBy;
         public long timestamp;
-        
+
         public String getFormattedDate() {
             java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy/MM/dd HH:mm");
             return sdf.format(new java.util.Date(timestamp));

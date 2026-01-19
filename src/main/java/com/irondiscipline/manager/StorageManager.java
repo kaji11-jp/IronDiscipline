@@ -54,12 +54,12 @@ public class StorageManager {
                 throw new SQLException("H2ドライバーが見つかりません", e2);
             }
         }
-        
+
         // データフォルダを作成
         if (!plugin.getDataFolder().exists()) {
             plugin.getDataFolder().mkdirs();
         }
-        
+
         File dbFile = new File(plugin.getDataFolder(), "irondiscipline");
         String url = "jdbc:h2:" + dbFile.getAbsolutePath() + ";MODE=MySQL";
         connection = DriverManager.getConnection(url, "sa", "");
@@ -68,10 +68,9 @@ public class StorageManager {
     private void initMySQL() throws SQLException {
         ConfigManager config = plugin.getConfigManager();
         String url = String.format("jdbc:mysql://%s:%d/%s?useSSL=false&autoReconnect=true",
-            config.getMySQLHost(),
-            config.getMySQLPort(),
-            config.getMySQLDatabase()
-        );
+                config.getMySQLHost(),
+                config.getMySQLPort(),
+                config.getMySQLDatabase());
         connection = DriverManager.getConnection(url, config.getMySQLUsername(), config.getMySQLPassword());
     }
 
@@ -79,33 +78,47 @@ public class StorageManager {
         // Kill logs table
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("""
-                CREATE TABLE IF NOT EXISTS kill_logs (
-                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                    timestamp BIGINT NOT NULL,
-                    killer_id VARCHAR(36),
-                    killer_name VARCHAR(32),
-                    victim_id VARCHAR(36) NOT NULL,
-                    victim_name VARCHAR(32) NOT NULL,
-                    weapon VARCHAR(64),
-                    distance DOUBLE,
-                    world VARCHAR(64),
-                    x DOUBLE,
-                    y DOUBLE,
-                    z DOUBLE
-                )
-            """);
+                        CREATE TABLE IF NOT EXISTS kill_logs (
+                            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                            timestamp BIGINT NOT NULL,
+                            killer_id VARCHAR(36),
+                            killer_name VARCHAR(32),
+                            victim_id VARCHAR(36) NOT NULL,
+                            victim_name VARCHAR(32) NOT NULL,
+                            weapon VARCHAR(64),
+                            distance DOUBLE,
+                            world VARCHAR(64),
+                            x DOUBLE,
+                            y DOUBLE,
+                            z DOUBLE
+                        )
+                    """);
 
             // Jailed players table
             stmt.execute("""
-                CREATE TABLE IF NOT EXISTS jailed_players (
-                    player_id VARCHAR(36) PRIMARY KEY,
-                    player_name VARCHAR(32) NOT NULL,
-                    reason TEXT,
-                    jailed_at BIGINT NOT NULL,
-                    jailed_by VARCHAR(36),
-                    original_location TEXT
-                )
-            """);
+                        CREATE TABLE IF NOT EXISTS jailed_players (
+                            player_id VARCHAR(36) PRIMARY KEY,
+                            player_name VARCHAR(32) NOT NULL,
+                            reason TEXT,
+                            jailed_at BIGINT NOT NULL,
+                            jailed_by VARCHAR(36),
+                            original_location TEXT,
+                            inventory_backup LONGTEXT,
+                            armor_backup LONGTEXT
+                        )
+                    """);
+
+            // Migration: Add columns if they don't exist (for existing databases)
+            try {
+                stmt.execute("ALTER TABLE jailed_players ADD COLUMN inventory_backup LONGTEXT");
+            } catch (SQLException ignored) {
+                // Column likely already exists
+            }
+            try {
+                stmt.execute("ALTER TABLE jailed_players ADD COLUMN armor_backup LONGTEXT");
+            } catch (SQLException ignored) {
+                // Column likely already exists
+            }
 
             // Create indexes
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_kill_logs_timestamp ON kill_logs(timestamp)");
@@ -129,10 +142,10 @@ public class StorageManager {
 
     private void saveKillLog(KillLog log) throws SQLException {
         String sql = """
-            INSERT INTO kill_logs (timestamp, killer_id, killer_name, victim_id, victim_name, 
-                                   weapon, distance, world, x, y, z)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """;
+                    INSERT INTO kill_logs (timestamp, killer_id, killer_name, victim_id, victim_name,
+                                           weapon, distance, world, x, y, z)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """;
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setLong(1, log.getTimestamp());
             ps.setString(2, log.getKillerId() != null ? log.getKillerId().toString() : null);
@@ -166,11 +179,11 @@ public class StorageManager {
     private List<KillLog> getKillLogs(UUID playerId, int limit) throws SQLException {
         List<KillLog> logs = new ArrayList<>();
         String sql = """
-            SELECT * FROM kill_logs 
-            WHERE killer_id = ? OR victim_id = ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-        """;
+                    SELECT * FROM kill_logs
+                    WHERE killer_id = ? OR victim_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                """;
         try (PreparedStatement ps = connection.prepareStatement(sql)) {
             String id = playerId.toString();
             ps.setString(1, id);
@@ -215,17 +228,16 @@ public class StorageManager {
 
     private KillLog parseKillLog(ResultSet rs) throws SQLException {
         return KillLog.builder()
-            .id(rs.getLong("id"))
-            .timestamp(rs.getLong("timestamp"))
-            .killer(
-                rs.getString("killer_id") != null ? UUID.fromString(rs.getString("killer_id")) : null,
-                rs.getString("killer_name")
-            )
-            .victim(UUID.fromString(rs.getString("victim_id")), rs.getString("victim_name"))
-            .weapon(rs.getString("weapon"))
-            .distance(rs.getDouble("distance"))
-            .location(rs.getString("world"), rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"))
-            .build();
+                .id(rs.getLong("id"))
+                .timestamp(rs.getLong("timestamp"))
+                .killer(
+                        rs.getString("killer_id") != null ? UUID.fromString(rs.getString("killer_id")) : null,
+                        rs.getString("killer_name"))
+                .victim(UUID.fromString(rs.getString("victim_id")), rs.getString("victim_name"))
+                .weapon(rs.getString("weapon"))
+                .distance(rs.getDouble("distance"))
+                .location(rs.getString("world"), rs.getDouble("x"), rs.getDouble("y"), rs.getDouble("z"))
+                .build();
     }
 
     // ===== Jail Data =====
@@ -233,15 +245,19 @@ public class StorageManager {
     /**
      * 隔離データを保存
      */
-    public void saveJailedPlayer(UUID playerId, String playerName, String reason, 
-                                  UUID jailedBy, String originalLocation) {
+    /**
+     * 隔離データを保存 (インベントリバックアップ付き)
+     */
+    public void saveJailedPlayer(UUID playerId, String playerName, String reason,
+            UUID jailedBy, String originalLocation,
+            String inventoryBackup, String armorBackup) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 String sql = """
-                    MERGE INTO jailed_players (player_id, player_name, reason, jailed_at, jailed_by, original_location)
-                    KEY (player_id)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """;
+                            MERGE INTO jailed_players (player_id, player_name, reason, jailed_at, jailed_by, original_location, inventory_backup, armor_backup)
+                            KEY (player_id)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """;
                 try (PreparedStatement ps = connection.prepareStatement(sql)) {
                     ps.setString(1, playerId.toString());
                     ps.setString(2, playerName);
@@ -249,12 +265,23 @@ public class StorageManager {
                     ps.setLong(4, System.currentTimeMillis());
                     ps.setString(5, jailedBy != null ? jailedBy.toString() : null);
                     ps.setString(6, originalLocation);
+                    ps.setString(7, inventoryBackup);
+                    ps.setString(8, armorBackup);
                     ps.executeUpdate();
                 }
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.WARNING, "隔離データ保存失敗", e);
             }
         });
+    }
+
+    /**
+     * @deprecated Use the version with inventory backup instead
+     */
+    @Deprecated
+    public void saveJailedPlayer(UUID playerId, String playerName, String reason,
+            UUID jailedBy, String originalLocation) {
+        saveJailedPlayer(playerId, playerName, reason, jailedBy, originalLocation, null, null);
     }
 
     /**
@@ -295,6 +322,46 @@ public class StorageManager {
     }
 
     /**
+     * 隔離プレイヤーのインベントリバックアップを取得
+     */
+    public String getInventoryBackup(UUID playerId) {
+        try {
+            String sql = "SELECT inventory_backup FROM jailed_players WHERE player_id = ?";
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setString(1, playerId.toString());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getString("inventory_backup");
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "インベントリバックアップ取得失敗", e);
+        }
+        return null;
+    }
+
+    /**
+     * 隔離プレイヤーの装備バックアップを取得
+     */
+    public String getArmorBackup(UUID playerId) {
+        try {
+            String sql = "SELECT armor_backup FROM jailed_players WHERE player_id = ?";
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                ps.setString(1, playerId.toString());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getString("armor_backup");
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.WARNING, "装備バックアップ取得失敗", e);
+        }
+        return null;
+    }
+
+    /**
      * 隔離中かどうか確認
      */
     public boolean isJailed(UUID playerId) {
@@ -318,7 +385,7 @@ public class StorageManager {
     public void cleanupOldLogs() {
         int days = plugin.getConfigManager().getKillLogRetentionDays();
         long cutoff = System.currentTimeMillis() - (days * 24L * 60 * 60 * 1000);
-        
+
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 String sql = "DELETE FROM kill_logs WHERE timestamp < ?";
