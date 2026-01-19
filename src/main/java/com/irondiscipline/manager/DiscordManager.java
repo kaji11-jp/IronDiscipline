@@ -19,6 +19,11 @@ import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.EntitySelectInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
+import net.dv8tion.jda.api.interactions.components.selections.EntitySelectMenu;
+import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
+
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -649,9 +654,175 @@ public class DiscordManager extends ListenerAdapter {
                     .queue();
 
             event.reply("✅ ロール管理パネルを設置しました。").setEphemeral(true).queue();
+        } else if (type.equalsIgnoreCase("setup")) {
+            sendSetupPanel(event);
+            event.reply("✅ 設定パネルを開きました (自分のみ表示)").setEphemeral(true).queue();
+
         } else {
-            event.reply("❌ 不明なパネルタイプです (auth/roles)").setEphemeral(true).queue();
+            event.reply("❌ 不明なパネルタイプです (auth/roles/setup)").setEphemeral(true).queue();
         }
+    }
+
+    // ===== Setup Panel Logic (Phase 8) =====
+
+    /**
+     * 設定パネル（メインメニュー）を送信
+     */
+    private void sendSetupPanel(SlashCommandInteractionEvent event) {
+        StringSelectMenu menu = StringSelectMenu.create("setup_category")
+                .setPlaceholder("設定カテゴリを選択してください")
+                .addOption("⚙️ 基本設定", "basic", "通知チャンネル、権限ロールなどの基本設定")
+                .addOption("🎖️ 階級ロール設定", "ranks", "Minecraftの階級とDiscordロールの紐付け")
+                .build();
+
+        EmbedBuilder eb = new EmbedBuilder()
+                .setTitle("🛠️ IronDiscipline 設定パネル")
+                .setDescription("設定したいカテゴリを下のメニューから選んでください。")
+                .setColor(Color.LIGHT_GRAY);
+
+        event.getChannel().sendMessageEmbeds(eb.build())
+                .setActionRow(menu)
+                .queue();
+    }
+
+    @Override
+    public void onStringSelectInteraction(StringSelectInteractionEvent event) {
+        String id = event.getComponentId();
+
+        // カテゴリ選択
+        if (id.equals("setup_category")) {
+            String selected = event.getValues().get(0);
+
+            if (selected.equals("basic")) {
+                // 基本設定メニュー
+                EntitySelectMenu channelMenu = EntitySelectMenu
+                        .create("setup_channel", EntitySelectMenu.SelectTarget.CHANNEL)
+                        .setPlaceholder("通知チャンネルを選択")
+                        .setMinValues(0) // 選択解除用
+                        .setMaxValues(1)
+                        .build();
+
+                EntitySelectMenu notifyRoleMenu = EntitySelectMenu
+                        .create("setup_role_notify", EntitySelectMenu.SelectTarget.ROLE)
+                        .setPlaceholder("通知ロールを選択")
+                        .setMinValues(0)
+                        .setMaxValues(1)
+                        .build();
+
+                EntitySelectMenu verifiedRoleMenu = EntitySelectMenu
+                        .create("setup_role_verified", EntitySelectMenu.SelectTarget.ROLE)
+                        .setPlaceholder("認証済みロールを選択")
+                        .setMinValues(0)
+                        .setMaxValues(1)
+                        .build();
+
+                EntitySelectMenu unverifyRoleMenu = EntitySelectMenu
+                        .create("setup_role_unverified", EntitySelectMenu.SelectTarget.ROLE)
+                        .setPlaceholder("未認証ロールを選択")
+                        .setMinValues(0)
+                        .setMaxValues(1)
+                        .build();
+
+                EmbedBuilder eb = new EmbedBuilder()
+                        .setTitle("⚙️ 基本設定")
+                        .setDescription("各項目に対応するチャンネルやロールを選択してください。")
+                        .setColor(Color.BLUE);
+
+                event.editMessageEmbeds(eb.build())
+                        .setComponents(
+                                event.getMessage().getActionRows().get(0), // カテゴリメニュー維持
+                                net.dv8tion.jda.api.interactions.components.ActionRow.of(channelMenu),
+                                net.dv8tion.jda.api.interactions.components.ActionRow.of(notifyRoleMenu),
+                                net.dv8tion.jda.api.interactions.components.ActionRow.of(verifiedRoleMenu),
+                                net.dv8tion.jda.api.interactions.components.ActionRow.of(unverifyRoleMenu))
+                        .queue();
+
+            } else if (selected.equals("ranks")) {
+                // 階級選択メニュー
+                StringSelectMenu rankMenu = StringSelectMenu.create("setup_rank_select")
+                        .setPlaceholder("設定する階級を選択")
+                        .addOption("二等兵 (PRIVATE)", "PRIVATE")
+                        .addOption("上等兵 (PRIVATE_FIRST_CLASS)", "PRIVATE_FIRST_CLASS")
+                        .addOption("伍長 (CORPORAL)", "CORPORAL")
+                        .addOption("軍曹 (SERGEANT)", "SERGEANT")
+                        .addOption("曹長 (SERGEANT_MAJOR)", "SERGEANT_MAJOR")
+                        .addOption("准尉 (WARRANT_OFFICER)", "WARRANT_OFFICER")
+                        .addOption("少尉 (LIEUTENANT)", "LIEUTENANT")
+                        .addOption("中尉 (FIRST_LIEUTENANT)", "FIRST_LIEUTENANT")
+                        .addOption("大尉 (CAPTAIN)", "CAPTAIN")
+                        .addOption("少佐 (MAJOR)", "MAJOR")
+                        .addOption("中佐 (LIEUTENANT_COLONEL)", "LIEUTENANT_COLONEL")
+                        .addOption("大佐 (COLONEL)", "COLONEL")
+                        .build();
+
+                EmbedBuilder eb = new EmbedBuilder()
+                        .setTitle("🎖️ 階級ロール設定")
+                        .setDescription("まず設定したい階級を選んでください。\nその後、ロール選択メニューが表示されます。")
+                        .setColor(Color.YELLOW);
+
+                event.editMessageEmbeds(eb.build())
+                        .setComponents(
+                                event.getMessage().getActionRows().get(0),
+                                net.dv8tion.jda.api.interactions.components.ActionRow.of(rankMenu))
+                        .queue();
+            }
+
+            // 階級選択後のロール選択表示
+        } else if (id.equals("setup_rank_select")) {
+            String rank = event.getValues().get(0);
+
+            EntitySelectMenu roleMenu = EntitySelectMenu
+                    .create("setup_rank_role_" + rank, EntitySelectMenu.SelectTarget.ROLE)
+                    .setPlaceholder(rank + " に紐付けるロールを選択")
+                    .setMinValues(0)
+                    .setMaxValues(1)
+                    .build();
+
+            EmbedBuilder eb = new EmbedBuilder()
+                    .setTitle("🎖️ 設定: " + rank)
+                    .setDescription("この階級に紐付けるDiscordロールを選択してください。")
+                    .setColor(Color.ORANGE);
+
+            event.editMessageEmbeds(eb.build())
+                    .setComponents(
+                            event.getMessage().getActionRows().get(0), // カテゴリ
+                            event.getMessage().getActionRows().get(1), // 階級選択
+                            net.dv8tion.jda.api.interactions.components.ActionRow.of(roleMenu))
+                    .queue();
+        }
+    }
+
+    @Override
+    public void onEntitySelectInteraction(EntitySelectInteractionEvent event) {
+        String id = event.getComponentId();
+        String value = event.getValues().isEmpty() ? "" : event.getValues().get(0).getId();
+        String name = event.getValues().isEmpty() ? "なし" : event.getValues().get(0).getAsMention(); // Channel or Role
+                                                                                                    // mention
+
+        if (id.equals("setup_channel")) {
+            plugin.getConfigManager().setDiscordSetting("notification_channel_id", value);
+            event.reply("✅ 通知チャンネルを更新しました: " + name).setEphemeral(true).queue();
+
+        } else if (id.equals("setup_role_notify")) {
+            plugin.getConfigManager().setDiscordSetting("notification_role_id", value);
+            event.reply("✅ 通知ロールを更新しました: " + name).setEphemeral(true).queue();
+
+        } else if (id.equals("setup_role_verified")) {
+            plugin.getConfigManager().setDiscordSetting("verified_role_id", value);
+            event.reply("✅ 認証済みロールを更新しました: " + name).setEphemeral(true).queue();
+
+        } else if (id.equals("setup_role_unverified")) {
+            plugin.getConfigManager().setDiscordSetting("unverified_role_id", value);
+            event.reply("✅ 未認証ロールを更新しました: " + name).setEphemeral(true).queue();
+
+        } else if (id.startsWith("setup_rank_role_")) {
+            String rankId = id.replace("setup_rank_role_", "");
+            plugin.getConfigManager().setDiscordRankRole(rankId, value);
+            event.reply("✅ 階級 `" + rankId + "` のロールを更新しました: " + name).setEphemeral(true).queue();
+        }
+
+        // 設定を保存
+        plugin.getConfigManager().reload();
     }
 
     public void onUnlink(long discordId) {
