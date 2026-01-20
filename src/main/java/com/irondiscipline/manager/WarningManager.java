@@ -1,16 +1,12 @@
 package com.irondiscipline.manager;
 
 import com.irondiscipline.IronDiscipline;
-import com.irondiscipline.model.Rank;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
-import java.io.*;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 警告マネージャー
@@ -19,141 +15,92 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class WarningManager {
 
     private final IronDiscipline plugin;
-    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-    // プレイヤー -> 警告リスト
-    private final Map<UUID, List<Warning>> warnings = new ConcurrentHashMap<>();
-
-    private File dataFile;
+    // キャッシュ (Lazy Loading)
+    private final Map<UUID, List<Warning>> cache = new ConcurrentHashMap<>();
 
     public WarningManager(IronDiscipline plugin) {
         this.plugin = plugin;
-        this.dataFile = new File(plugin.getDataFolder(), "warnings.json");
-        loadData();
     }
 
     /**
-     * 警告を追加
+     * 警告を追加 (非同期)
      */
-    public int addWarning(UUID playerId, String playerName, String reason, UUID warnedBy) {
-        List<Warning> playerWarnings = warnings.computeIfAbsent(playerId, k -> new CopyOnWriteArrayList<>());
+    public CompletableFuture<Integer> addWarning(UUID playerId, String playerName, String reason, UUID warnedBy) {
+        String warnedById = warnedBy != null ? warnedBy.toString() : "CONSOLE";
+        long timestamp = System.currentTimeMillis();
 
-        Warning warning = new Warning();
-        warning.reason = reason;
-        warning.warnedBy = warnedBy != null ? warnedBy.toString() : "CONSOLE";
-        warning.timestamp = System.currentTimeMillis();
+        return plugin.getStorageManager().addWarningAsync(playerId, playerName, reason, warnedById, timestamp)
+            .thenCompose(v -> getWarnings(playerId))
+            .thenApply(list -> {
+                // キャッシュ更新 (getWarningsで既に更新されているはずだが念のため)
+                int count = list.size();
 
-        playerWarnings.add(warning);
-        saveData();
+                // 自動処分チェック (メインスレッドに戻して実行)
+                Bukkit.getScheduler().runTask(plugin, () -> checkAutoPunish(playerId, count));
 
-        int count = playerWarnings.size();
+                return count;
+            });
+    }
 
-        // 自動処分
+    private void checkAutoPunish(UUID playerId, int count) {
         Player target = Bukkit.getPlayer(playerId);
-        int kickLimit = plugin.getConfigManager().getWarningKickThreshold();
-        int jailLimit = plugin.getConfigManager().getWarningJailThreshold();
-
         if (target != null && target.isOnline()) {
+            int kickLimit = plugin.getConfigManager().getWarningKickThreshold();
+            int jailLimit = plugin.getConfigManager().getWarningJailThreshold();
+
             if (count >= kickLimit) {
-                // キック
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    target.kickPlayer("§c警告が" + kickLimit + "回に達したため、キックされました。");
-                });
+                target.kickPlayer("§c警告が" + kickLimit + "回に達したため、キックされました。");
             } else if (count >= jailLimit) {
-                // 隔離
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    plugin.getJailManager().jail(target, null, "警告" + count + "回による自動隔離");
-                });
+                plugin.getJailManager().jail(target, null, "警告" + count + "回による自動隔離");
             }
         }
-
-        return count;
     }
 
     /**
-     * 警告数を取得
+     * 警告リストを取得 (非同期)
      */
-    public int getWarningCount(UUID playerId) {
-        List<Warning> playerWarnings = warnings.get(playerId);
-        return playerWarnings != null ? playerWarnings.size() : 0;
-    }
-
-    /**
-     * 警告リストを取得
-     */
-    public List<Warning> getWarnings(UUID playerId) {
-        return new ArrayList<>(warnings.getOrDefault(playerId, new ArrayList<>()));
-    }
-
-    /**
-     * 警告をクリア
-     */
-    public void clearWarnings(UUID playerId) {
-        warnings.remove(playerId);
-        saveData();
-    }
-
-    /**
-     * 最新の警告を削除
-     */
-    public boolean removeLastWarning(UUID playerId) {
-        List<Warning> playerWarnings = warnings.get(playerId);
-        if (playerWarnings != null && !playerWarnings.isEmpty()) {
-            playerWarnings.remove(playerWarnings.size() - 1);
-            if (playerWarnings.isEmpty()) {
-                warnings.remove(playerId);
-            }
-            saveData();
-            return true;
+    public CompletableFuture<List<Warning>> getWarnings(UUID playerId) {
+        if (cache.containsKey(playerId)) {
+            return CompletableFuture.completedFuture(new ArrayList<>(cache.get(playerId)));
         }
-        return false;
+
+        return plugin.getStorageManager().getWarningsAsync(playerId)
+            .thenApply(list -> {
+                cache.put(playerId, list);
+                return list;
+            });
     }
 
     /**
-     * データを保存
+     * 警告をクリア (非同期)
      */
-    private void saveData() {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                Map<String, List<Warning>> data = new HashMap<>();
-                for (Map.Entry<UUID, List<Warning>> entry : warnings.entrySet()) {
-                    data.put(entry.getKey().toString(), entry.getValue());
-                }
+    public CompletableFuture<Void> clearWarnings(UUID playerId) {
+        cache.remove(playerId);
+        return plugin.getStorageManager().clearWarningsAsync(playerId);
+    }
 
-                try (Writer writer = new FileWriter(dataFile)) {
-                    gson.toJson(data, writer);
-                }
-            } catch (IOException e) {
-                plugin.getLogger().warning("警告データ保存失敗: " + e.getMessage());
+    /**
+     * 最新の警告を削除 (非同期)
+     */
+    public CompletableFuture<Boolean> removeLastWarning(UUID playerId) {
+        return getWarnings(playerId).thenCompose(list -> {
+            if (list.isEmpty()) {
+                return CompletableFuture.completedFuture(false);
             }
+
+            return plugin.getStorageManager().removeLastWarningAsync(playerId).thenApply(v -> {
+                cache.remove(playerId); // キャッシュ無効化して再読み込みを促す
+                return true;
+            });
         });
     }
 
     /**
-     * データを読み込み
+     * キャッシュ無効化
      */
-    private void loadData() {
-        if (!dataFile.exists()) {
-            return;
-        }
-
-        try (Reader reader = new FileReader(dataFile)) {
-            java.lang.reflect.Type type = new com.google.gson.reflect.TypeToken<Map<String, List<Warning>>>() {
-            }.getType();
-            Map<String, List<Warning>> data = gson.fromJson(reader, type);
-            if (data != null) {
-                for (Map.Entry<String, List<Warning>> entry : data.entrySet()) {
-                    try {
-                        UUID uuid = UUID.fromString(entry.getKey());
-                        warnings.put(uuid, new CopyOnWriteArrayList<>(entry.getValue()));
-                    } catch (IllegalArgumentException ignored) {
-                    }
-                }
-            }
-            plugin.getLogger().info("警告データ読み込み完了");
-        } catch (IOException e) {
-            plugin.getLogger().warning("警告データ読み込み失敗: " + e.getMessage());
-        }
+    public void invalidateCache(UUID playerId) {
+        cache.remove(playerId);
     }
 
     /**
