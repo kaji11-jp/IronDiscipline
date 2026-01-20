@@ -27,6 +27,10 @@ public class ExamManager implements Listener {
     // Map<PlayerUUID, QuizState>
     private final Map<UUID, QuizSession> quizSessions = new ConcurrentHashMap<>();
 
+    // 簡易的なチーム管理 (ExamQuestionManager用)
+    // TeamName -> Set<UUID>
+    private final Map<String, Set<UUID>> examTeams = new ConcurrentHashMap<>();
+
     public ExamManager(IronDiscipline plugin) {
         this.plugin = plugin;
         Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -85,6 +89,44 @@ public class ExamManager implements Listener {
         Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', msg));
         // 必要ならキックなどの処理
     }
+
+    /**
+     * プレイヤーが試験中（クイズ中）かどうか
+     */
+    public boolean isInExam(UUID playerId) {
+        return quizSessions.containsKey(playerId);
+    }
+
+    /**
+     * チームメンバーを取得 (ExamQuestionManager用)
+     */
+    public Set<UUID> getTeamMembers(String teamName) {
+        String key = teamName.toLowerCase();
+
+        // チーム登録がない場合は、すべてのオンラインプレイヤーから
+        // divisionメタデータ等で判定するのが理想だが、
+        // 今回はとりあえず空セットまたは登録済みセットを返す
+        return examTeams.getOrDefault(key, new HashSet<>());
+    }
+
+    /**
+     * 試験チームにメンバーを追加 (API)
+     */
+    public void addTeamMember(String teamName, UUID playerId) {
+        examTeams.computeIfAbsent(teamName.toLowerCase(), k -> ConcurrentHashMap.newKeySet()).add(playerId);
+    }
+
+    /**
+     * 試験チームからメンバーを削除 (API)
+     */
+    public void removeTeamMember(String teamName, UUID playerId) {
+        String key = teamName.toLowerCase();
+        if (examTeams.containsKey(key)) {
+            examTeams.get(key).remove(playerId);
+        }
+    }
+
+    // ===== クイズ機能 =====
 
     // ===== クイズ機能 =====
 
