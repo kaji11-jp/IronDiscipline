@@ -247,4 +247,13 @@ public class PTSManager {
         grantedPlayers.remove(playerId);
         requestingPlayers.remove(playerId);
     }
+
+    /**
+     * タスク停止 (シャットダウン処理)
+     */
+    public void shutdown() {
+        if (expirationTask != null && !expirationTask.isCancelled()) {
+            expirationTask.cancel();
+        }
+    }
 }

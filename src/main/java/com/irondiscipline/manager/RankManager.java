@@ -85,8 +85,10 @@ public class RankManager {
                 // キャッシュ更新
                 rankCache.put(player.getUniqueId(), newRank);
                 
-                // Tab/ネームタグ即時更新
+                // Tab/ネームタグ即時更新 (メインスレッドで行うことを保証)
                 Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (!player.isOnline()) return;
+
                     TabNametagUtil.updatePlayer(player, newRank);
                     
                     // 本人に通知

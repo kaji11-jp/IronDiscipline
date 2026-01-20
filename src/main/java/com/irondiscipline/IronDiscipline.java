@@ -74,6 +74,14 @@ public class IronDiscipline extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // タスク停止
+        if (ptsManager != null) {
+            ptsManager.shutdown();
+        }
+        if (autoPromotionManager != null) {
+            autoPromotionManager.shutdown();
+        }
+
         // データ保存
         if (storageManager != null) {
             storageManager.shutdown();

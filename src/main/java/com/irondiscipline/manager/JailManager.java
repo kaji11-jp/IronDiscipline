@@ -52,30 +52,43 @@ public class JailManager {
         String invBackup = InventoryUtil.toBase64(target.getInventory().getContents());
         String armorBackup = InventoryUtil.toBase64(target.getInventory().getArmorContents());
 
-        // インベントリクリア
-        target.getInventory().clear();
-        target.getInventory().setArmorContents(new ItemStack[4]);
+        // DB保存を先に実行 (トランザクション的安全性)
+        // 戻り値はvoidではないので、呼び出し元での同期的な戻り値はfalseにし、完了後に処理する形が理想だが
+        // 現状のAPI仕様上、同期的にtrue/falseを返す必要があるため、処理の開始を返す形にする。
 
-        // ゲームモードをアドベンチャーに（ブロック破壊防止）
-        target.setGameMode(GameMode.ADVENTURE);
+        plugin.getStorageManager().saveJailedPlayerAsync(targetId, target.getName(), reason,
+                jailer != null ? jailer.getUniqueId() : null, locString, invBackup, armorBackup)
+            .thenAccept(success -> {
+                if (success) {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        // DB保存成功後にインベントリ操作とテレポート
+                        if (!target.isOnline()) return;
 
-        // 隔離場所へテレポート
-        target.teleport(jailLocation);
+                        // インベントリクリア
+                        target.getInventory().clear();
+                        target.getInventory().setArmorContents(new ItemStack[4]);
 
-        // データ保存 (キャッシュ)
-        JailData data = new JailData(targetId, target.getName(), reason,
-                System.currentTimeMillis(), jailer != null ? jailer.getUniqueId() : null, locString);
-        jailedPlayers.put(targetId, data);
+                        // ゲームモードをアドベンチャーに
+                        target.setGameMode(GameMode.ADVENTURE);
 
-        // DB保存 (インベントリ含む)
-        plugin.getStorageManager().saveJailedPlayer(targetId, target.getName(), reason,
-                jailer != null ? jailer.getUniqueId() : null, locString, invBackup, armorBackup);
+                        // 隔離場所へテレポート
+                        target.teleport(jailLocation);
 
-        // 通知
-        target.sendMessage(plugin.getConfigManager().getMessage("jail_you_jailed",
-                "%reason%", reason != null ? reason : "理由なし"));
+                        // データ保存 (キャッシュ)
+                        JailData data = new JailData(targetId, target.getName(), reason,
+                                System.currentTimeMillis(), jailer != null ? jailer.getUniqueId() : null, locString);
+                        jailedPlayers.put(targetId, data);
 
-        return true;
+                        // 通知
+                        target.sendMessage(plugin.getConfigManager().getMessage("jail_you_jailed",
+                                "%reason%", reason != null ? reason : "理由なし"));
+                    });
+                } else {
+                    plugin.getLogger().warning("隔離処理中断: DB保存に失敗しました - " + target.getName());
+                }
+            });
+
+        return true; // 処理を開始したことを返す
     }
 
     /**
@@ -139,11 +152,13 @@ public class JailManager {
                         }
                     }
 
-                    // DB削除
-                    plugin.getStorageManager().removeJailedPlayer(targetId);
-
-                    // 通知
-                    target.sendMessage(plugin.getConfigManager().getMessage("jail_you_released"));
+                    // DB削除 (非同期)
+                    plugin.getStorageManager().removeJailedPlayerAsync(targetId).thenRun(() -> {
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            // 通知 (DB削除完了後)
+                            target.sendMessage(plugin.getConfigManager().getMessage("jail_you_released"));
+                        });
+                    });
                 });
             });
         });
@@ -171,13 +186,29 @@ public class JailManager {
     public void onPlayerJoin(Player player) {
         UUID playerId = player.getUniqueId();
 
+        // 元のゲームモードを保存 (Race Condition対策で一時的にスペクテイターにするため)
+        GameMode originalMode = player.getGameMode();
+
+        // 即座に行動制限
+        player.setGameMode(GameMode.SPECTATOR);
+
         // 非同期チェック
         plugin.getStorageManager().isJailedAsync(playerId).thenAccept(isJailed -> {
-            if (!isJailed) return;
+            if (!isJailed) {
+                // 隔離中でなければ元のモードに復元
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                   if (player.isOnline()) {
+                       player.setGameMode(originalMode);
+                   }
+                });
+                return;
+            }
 
             // DBからバックアップ状況を確認
             plugin.getStorageManager().getInventoryBackupAsync(playerId).thenAccept(invBackup -> {
                 Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (!player.isOnline()) return;
+
                     // バックアップがない場合（オフライン処罰時）は今すぐバックアップ
                     if (invBackup == null) {
                         // インベントリバックアップ
@@ -206,12 +237,10 @@ public class JailManager {
                     // 隔離場所にテレポート
                     Location jailLocation = plugin.getConfigManager().getJailLocation();
                     if (jailLocation != null) {
-                        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                            player.teleport(jailLocation);
-                            player.setGameMode(GameMode.ADVENTURE);
-                            player.sendMessage(plugin.getConfigManager().getMessage("jail_you_jailed",
-                                    "%reason%", "拘留中のため再配置"));
-                        }, 20L);
+                        player.teleport(jailLocation);
+                        player.setGameMode(GameMode.ADVENTURE);
+                        player.sendMessage(plugin.getConfigManager().getMessage("jail_you_jailed",
+                                "%reason%", "拘留中のため再配置"));
                     }
                 });
             });
