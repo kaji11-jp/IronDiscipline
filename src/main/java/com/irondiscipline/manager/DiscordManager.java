@@ -326,9 +326,10 @@ public class DiscordManager extends ListenerAdapter {
         }
 
         // 警告実行
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            int count = plugin.getWarningManager().addWarning(targetMinecraft, target.getName(), reason, null);
-            target.sendMessage("§c§l【警告】§r§c " + reason + " §7(警告" + count + "回目)");
+        plugin.getWarningManager().addWarning(targetMinecraft, target.getName(), reason, null).thenAccept(count -> {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                target.sendMessage("§c§l【警告】§r§c " + reason + " §7(警告" + count + "回目)");
+            });
         });
 
         event.reply("✅ " + target.getName() + " に警告を与えました。理由: " + reason).queue();
