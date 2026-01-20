@@ -97,6 +97,27 @@ warnings:
     jail: 3
     kick: 5
 
+    jail: 3
+    kick: 5
+
+# 昇進システム設定
+promotion:
+  # 時間経過による自動昇進
+  time_based:
+    enabled: false # デフォルトは無効 (選択可)
+    interval: 300   # チェック間隔 (秒) - 5分
+    check_afk: true # AFK時間を考慮するか (現時点ではプレースホルダー)
+    # 昇進ルール: 階級ID: 必要プレイ時間(分)
+    # 0は即時、または適用外
+    rules:
+      PRIVATE: 60      # 1時間
+      CORPORAL: 600    # 10時間
+      SERGEANT: 3000   # 50時間 (例)
+  
+  # 試験設定
+  exam:
+    quiz_timeout: 45 # クイズの回答制限時間 (秒)
+
 # メッセージ設定
 messages:
   prefix: "&8[&c鉄の規律&8] "

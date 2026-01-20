@@ -150,6 +150,28 @@ public class ConfigManager {
         return config.getInt("warnings.thresholds.kick", 5);
     }
 
+    // ===== Promotion =====
+
+    public boolean isTimeBasedPromotionEnabled() {
+        return config.getBoolean("promotion.time_based.enabled", false);
+    }
+
+    public int getTimeBasedPromotionInterval() {
+        return config.getInt("promotion.time_based.interval", 300);
+    }
+
+    public boolean isTimeBasedCheckAFK() {
+        return config.getBoolean("promotion.time_based.check_afk", true);
+    }
+
+    public int getServerPlaytimeRequirement(String rankId) {
+        return config.getInt("promotion.time_based.rules." + rankId.toUpperCase(), -1);
+    }
+
+    public int getExamQuizTimeout() {
+        return config.getInt("promotion.exam.quiz_timeout", 45);
+    }
+
     public String getMessage(String key) {
         String message = config.getString("messages." + key, key);
         return getPrefix() + colorize(message);

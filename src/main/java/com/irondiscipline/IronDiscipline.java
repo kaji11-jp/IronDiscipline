@@ -19,7 +19,7 @@ import java.util.logging.Level;
 public class IronDiscipline extends JavaPlugin {
 
     private static IronDiscipline instance;
-    
+
     // Managers
     private ConfigManager configManager;
     private StorageManager storageManager;
@@ -34,40 +34,41 @@ public class IronDiscipline extends JavaPlugin {
     private ExamQuestionManager examQuestionManager;
     private LinkManager linkManager;
     private DiscordManager discordManager;
-    
+    private AutoPromotionManager autoPromotionManager;
+
     // Utilities
     private RankUtil rankUtil;
-    
+
     // LuckPerms API
     private LuckPerms luckPerms;
 
     @Override
     public void onEnable() {
         instance = this;
-        
+
         // バナー表示
         logBanner();
-        
+
         // 設定読み込み
         saveDefaultConfig();
         this.configManager = new ConfigManager(this);
-        
+
         // LuckPerms連携
         if (!hookLuckPerms()) {
             getLogger().severe("LuckPermsが見つかりません！プラグインを無効化します。");
             Bukkit.getPluginManager().disablePlugin(this);
             return;
         }
-        
+
         // Manager初期化
         initializeManagers();
-        
+
         // リスナー登録
         registerListeners();
-        
+
         // コマンド登録
         registerCommands();
-        
+
         getLogger().info(ChatColor.GREEN + "鉄の規律 v" + getDescription().getVersion() + " 起動完了！");
     }
 
@@ -86,7 +87,7 @@ public class IronDiscipline extends JavaPlugin {
         if (discordManager != null) {
             discordManager.shutdown();
         }
-        
+
         getLogger().info("鉄の規律 シャットダウン完了");
     }
 
@@ -125,11 +126,15 @@ public class IronDiscipline extends JavaPlugin {
         this.examQuestionManager = new ExamQuestionManager(this);
         this.linkManager = new LinkManager(this);
         this.discordManager = new DiscordManager(this);
+        this.autoPromotionManager = new AutoPromotionManager(this, rankManager);
         this.rankUtil = new RankUtil(this);
-        
+
+        // Start auto-promotion task
+        this.autoPromotionManager.startTask();
+
         // Discord Bot 起動
         initDiscord();
-        
+
         getLogger().info("マネージャー初期化完了");
     }
 
@@ -138,7 +143,7 @@ public class IronDiscipline extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new CombatListener(this), this);
         Bukkit.getPluginManager().registerEvents(new JoinQuitListener(this), this);
         Bukkit.getPluginManager().registerEvents(new GestureListener(this), this);
-        
+
         getLogger().info("イベントリスナー登録完了");
     }
 
@@ -153,11 +158,11 @@ public class IronDiscipline extends JavaPlugin {
         getCommand("setjail").setExecutor(new SetJailCommand(this));
         getCommand("killlog").setExecutor(new KillLogCommand(this));
         getCommand("irondiscipline").setExecutor(new IronDisciplineCommand(this));
-        
+
         ExamCommand examCmd = new ExamCommand(this);
         getCommand("exam").setExecutor(examCmd);
         getCommand("exam").setTabCompleter(examCmd);
-        
+
         // Phase 3 commands
         WarnCommand warnCmd = new WarnCommand(this);
         getCommand("warn").setExecutor(warnCmd);
@@ -166,18 +171,18 @@ public class IronDiscipline extends JavaPlugin {
         getCommand("warnings").setTabCompleter(warnCmd);
         getCommand("clearwarnings").setExecutor(warnCmd);
         getCommand("unwarn").setExecutor(warnCmd);
-        
+
         PlaytimeCommand playtimeCmd = new PlaytimeCommand(this);
         getCommand("playtime").setExecutor(playtimeCmd);
         getCommand("playtime").setTabCompleter(playtimeCmd);
-        
+
         DivisionCommand divCmd = new DivisionCommand(this);
         getCommand("division").setExecutor(divCmd);
         getCommand("division").setTabCompleter(divCmd);
-        
+
         // Phase 4 - Discord連携
         getCommand("link").setExecutor(new LinkCommand(this));
-        
+
         getLogger().info("コマンド登録完了");
     }
 
@@ -187,7 +192,7 @@ public class IronDiscipline extends JavaPlugin {
         String guildId = configManager.getDiscordGuildId();
         String unverifiedRoleId = configManager.getDiscordUnverifiedRoleId();
         String verifiedRoleId = configManager.getDiscordVerifiedRoleId();
-        
+
         if (botToken != null && !botToken.isEmpty() && configManager.isDiscordEnabled()) {
             discordManager.start(botToken, channelId, guildId, unverifiedRoleId, verifiedRoleId);
         } else {
@@ -205,7 +210,7 @@ public class IronDiscipline extends JavaPlugin {
     }
 
     // ===== Getters =====
-    
+
     public static IronDiscipline getInstance() {
         return instance;
     }
@@ -264,6 +269,10 @@ public class IronDiscipline extends JavaPlugin {
 
     public DiscordManager getDiscordManager() {
         return discordManager;
+    }
+
+    public AutoPromotionManager getAutoPromotionManager() {
+        return autoPromotionManager;
     }
 
     public LuckPerms getLuckPerms() {

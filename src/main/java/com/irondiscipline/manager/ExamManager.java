@@ -1,263 +1,212 @@
 package com.irondiscipline.manager;
 
 import com.irondiscipline.IronDiscipline;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
+import com.irondiscipline.model.Rank;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.util.Vector;
 
-import java.io.*;
-import java.lang.reflect.Type;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 試験システムマネージャー
- * チームの試験中状態とチャットミュートを管理
+ * 試験マネージャー
+ * 試験セッションとSTS(整列)機能を管理
  */
-public class ExamManager {
+public class ExamManager implements Listener {
 
     private final IronDiscipline plugin;
-    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
-    
-    // チーム名 -> メンバーUUID
-    private final Map<String, Set<UUID>> teams = new ConcurrentHashMap<>();
-    // 試験中のチーム
-    private final Set<String> activeExams = ConcurrentHashMap.newKeySet();
-    // プレイヤー -> 所属チーム
-    private final Map<UUID, String> playerTeams = new ConcurrentHashMap<>();
-    
-    private File dataFile;
+
+    // クイズ試験中のプレイヤーと現在の状態
+    // Map<PlayerUUID, QuizState>
+    private final Map<UUID, QuizSession> quizSessions = new ConcurrentHashMap<>();
 
     public ExamManager(IronDiscipline plugin) {
         this.plugin = plugin;
-        this.dataFile = new File(plugin.getDataFolder(), "exams.json");
-        loadData();
+        Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
     /**
-     * チームを作成
+     * STS (Shoulder To Shoulder) - 整列号令
+     * 指定したライン上にプレイヤーを整列させる、または整列を指示する
      */
-    public boolean createTeam(String teamName) {
-        if (teams.containsKey(teamName.toLowerCase())) {
-            return false;
-        }
-        teams.put(teamName.toLowerCase(), ConcurrentHashMap.newKeySet());
-        saveData();
-        return true;
+    public void startSTS(Player officer) {
+        // RP的な演出として、周囲のプレイヤーにメッセージとサウンドを送信
+        String message = ChatColor.YELLOW + "" + ChatColor.BOLD + "=== STS (SHOULDER TO SHOULDER) ===";
+        String subMessage = ChatColor.RED + officer.getName() + " が整列を命じた！直ちに整列せよ！";
+
+        officer.getWorld().getPlayers().stream()
+                .filter(p -> p.getLocation().distance(officer.getLocation()) < 50)
+                .forEach(p -> {
+                    p.sendMessage(message);
+                    p.sendMessage(subMessage);
+                    p.playSound(p.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 2f);
+                });
+
+        // オプション: 強制テレポートによる整列 (Roblox RP風)
+        // 実装が複雑になるため、今回はメッセージのみとするが、
+        // 必要に応じて officerの視線方向に一列に並べるロジックを追加可能
     }
 
     /**
-     * チームを削除
+     * 試験開始メッセージ
      */
-    public boolean deleteTeam(String teamName) {
-        String key = teamName.toLowerCase();
-        if (!teams.containsKey(key)) {
-            return false;
-        }
-        
-        // メンバーの所属を解除
-        Set<UUID> members = teams.get(key);
-        for (UUID uuid : members) {
-            playerTeams.remove(uuid);
-        }
-        
-        teams.remove(key);
-        activeExams.remove(key);
-        saveData();
-        return true;
+    public void startExamSession(Player instructor, Player target, String type) {
+        String msg = String.format("&e[試験] &f%s &eが &f%s &eの &b%s &e試験を開始した。",
+                instructor.getName(), target.getName(), type);
+        Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', msg));
     }
 
     /**
-     * プレイヤーをチームに追加
+     * 試験合格
      */
-    public boolean addToTeam(UUID playerId, String teamName) {
-        String key = teamName.toLowerCase();
-        if (!teams.containsKey(key)) {
-            return false;
-        }
-        
-        // 既存チームから削除
-        String currentTeam = playerTeams.get(playerId);
-        if (currentTeam != null) {
-            teams.get(currentTeam).remove(playerId);
-        }
-        
-        teams.get(key).add(playerId);
-        playerTeams.put(playerId, key);
-        saveData();
-        return true;
-    }
+    public void passExam(Player instructor, Player target) {
+        String msg = String.format("&a[合格] &f%s &aは試験に合格した！", target.getName());
+        Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', msg));
 
-    /**
-     * プレイヤーをチームから削除
-     */
-    public boolean removeFromTeam(UUID playerId) {
-        String teamName = playerTeams.remove(playerId);
-        if (teamName == null) {
-            return false;
-        }
-        
-        Set<UUID> members = teams.get(teamName);
-        if (members != null) {
-            members.remove(playerId);
-        }
-        saveData();
-        return true;
-    }
-
-    /**
-     * 試験開始
-     */
-    public boolean startExam(String teamName) {
-        String key = teamName.toLowerCase();
-        if (!teams.containsKey(key)) {
-            return false;
-        }
-        
-        activeExams.add(key);
-        
-        // チームメンバーに通知
-        notifyTeam(key, "§c§l【試験開始】§r§7 試験中はチャットが禁止されます");
-        return true;
-    }
-
-    /**
-     * 試験終了
-     */
-    public boolean endExam(String teamName) {
-        String key = teamName.toLowerCase();
-        if (!activeExams.remove(key)) {
-            return false;
-        }
-        
-        // チームメンバーに通知
-        notifyTeam(key, "§a§l【試験終了】§r§7 チャットが解禁されました");
-        return true;
-    }
-
-    /**
-     * プレイヤーが試験中かチェック
-     */
-    public boolean isInExam(UUID playerId) {
-        String teamName = playerTeams.get(playerId);
-        if (teamName == null) {
-            return false;
-        }
-        return activeExams.contains(teamName);
-    }
-
-    /**
-     * プレイヤーの所属チームを取得
-     */
-    public String getPlayerTeam(UUID playerId) {
-        return playerTeams.get(playerId);
-    }
-
-    /**
-     * チームが存在するかチェック
-     */
-    public boolean teamExists(String teamName) {
-        return teams.containsKey(teamName.toLowerCase());
-    }
-
-    /**
-     * チームが試験中かチェック
-     */
-    public boolean isExamActive(String teamName) {
-        return activeExams.contains(teamName.toLowerCase());
-    }
-
-    /**
-     * すべてのチーム名を取得
-     */
-    public Set<String> getTeamNames() {
-        return new HashSet<>(teams.keySet());
-    }
-
-    /**
-     * チームメンバーを取得
-     */
-    public Set<UUID> getTeamMembers(String teamName) {
-        Set<UUID> members = teams.get(teamName.toLowerCase());
-        return members != null ? new HashSet<>(members) : new HashSet<>();
-    }
-
-    /**
-     * チームに通知を送信
-     */
-    private void notifyTeam(String teamName, String message) {
-        Set<UUID> members = teams.get(teamName);
-        if (members == null) return;
-        
-        for (UUID uuid : members) {
-            Player player = Bukkit.getPlayer(uuid);
-            if (player != null && player.isOnline()) {
-                player.sendMessage(message);
-            }
-        }
-    }
-
-    /**
-     * データを保存
-     */
-    private void saveData() {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                ExamData data = new ExamData();
-                
-                // チームデータ変換
-                for (Map.Entry<String, Set<UUID>> entry : teams.entrySet()) {
-                    List<String> memberIds = new ArrayList<>();
-                    for (UUID uuid : entry.getValue()) {
-                        memberIds.add(uuid.toString());
-                    }
-                    data.teams.put(entry.getKey(), memberIds);
-                }
-                
-                try (Writer writer = new FileWriter(dataFile)) {
-                    gson.toJson(data, writer);
-                }
-            } catch (IOException e) {
-                plugin.getLogger().warning("試験データ保存失敗: " + e.getMessage());
+        plugin.getRankManager().promote(target).thenAccept(newRank -> {
+            if (newRank != null) {
+                target.sendMessage(ChatColor.GREEN + "昇進おめでとう！: " + newRank.getDisplay());
             }
         });
     }
 
     /**
-     * データを読み込み
+     * 試験不合格
      */
-    private void loadData() {
-        if (!dataFile.exists()) {
+    public void failExam(Player instructor, Player target) {
+        String msg = String.format("&c[不合格] &f%s &cは試験に不合格となった。", target.getName());
+        Bukkit.broadcastMessage(ChatColor.translateAlternateColorCodes('&', msg));
+        // 必要ならキックなどの処理
+    }
+
+    // ===== クイズ機能 =====
+
+    public void startQuiz(Player instructor, Player target) {
+        if (quizSessions.containsKey(target.getUniqueId())) {
+            instructor.sendMessage(ChatColor.RED + "そのプレイヤーは既に試験中です。");
             return;
         }
-        
-        try (Reader reader = new FileReader(dataFile)) {
-            ExamData data = gson.fromJson(reader, ExamData.class);
-            if (data != null && data.teams != null) {
-                for (Map.Entry<String, List<String>> entry : data.teams.entrySet()) {
-                    Set<UUID> members = ConcurrentHashMap.newKeySet();
-                    for (String id : entry.getValue()) {
-                        try {
-                            UUID uuid = UUID.fromString(id);
-                            members.add(uuid);
-                            playerTeams.put(uuid, entry.getKey());
-                        } catch (IllegalArgumentException ignored) {}
-                    }
-                    teams.put(entry.getKey(), members);
-                }
-            }
-            plugin.getLogger().info("試験データ読み込み完了: " + teams.size() + "チーム");
-        } catch (IOException e) {
-            plugin.getLogger().warning("試験データ読み込み失敗: " + e.getMessage());
+
+        // デモ用の簡単な問題リスト
+        List<Question> questions = new ArrayList<>();
+        questions.add(new Question("上官の命令は？", "絶対", Arrays.asList("絶対", "ぜったい")));
+        questions.add(new Question("無許可での発砲は許されるか？(はい/いいえ)", "いいえ", Arrays.asList("いいえ", "no")));
+        questions.add(new Question("サーバーの最強の階級は？", "司令官", Arrays.asList("司令官", "commander")));
+
+        QuizSession session = new QuizSession(target.getUniqueId(), questions);
+        quizSessions.put(target.getUniqueId(), session);
+
+        target.sendMessage(ChatColor.GREEN + "=== 筆記試験開始 ===");
+        target.sendMessage(ChatColor.YELLOW + "チャットで回答してください。");
+        askNextQuestion(target, session);
+    }
+
+    private void askNextQuestion(Player player, QuizSession session) {
+        Question q = session.getCurrentQuestion();
+        if (q == null) {
+            finishQuiz(player, session);
+            return;
+        }
+        player.sendMessage(ChatColor.GOLD + "問" + (session.currentIndex + 1) + ": " + ChatColor.WHITE + q.text);
+    }
+
+    private void finishQuiz(Player player, QuizSession session) {
+        quizSessions.remove(player.getUniqueId());
+
+        int score = session.score;
+        int total = session.questions.size();
+        double percentage = (double) score / total;
+
+        player.sendMessage(ChatColor.YELLOW + "試験終了！");
+        player.sendMessage(ChatColor.WHITE + "正解数: " + score + " / " + total);
+
+        if (percentage >= 0.8) { // 80%以上で合格
+            Bukkit.broadcastMessage(ChatColor.GREEN + player.getName() + " が筆記試験に合格しました！");
+            plugin.getRankManager().promote(player);
+        } else {
+            player.sendMessage(ChatColor.RED + "不合格です。出直してこい！");
         }
     }
 
-    /**
-     * データクラス
-     */
-    private static class ExamData {
-        Map<String, List<String>> teams = new HashMap<>();
+    @EventHandler
+    public void onChat(AsyncPlayerChatEvent event) {
+        Player player = event.getPlayer();
+        if (!quizSessions.containsKey(player.getUniqueId())) {
+            return;
+        }
+
+        event.setCancelled(true); // チャットをキャンセル
+        QuizSession session = quizSessions.get(player.getUniqueId());
+        String answer = event.getMessage();
+
+        // 強制終了コマンド
+        if (answer.equalsIgnoreCase("cancel")) {
+            quizSessions.remove(player.getUniqueId());
+            player.sendMessage(ChatColor.RED + "試験をキャンセルしました。");
+            return;
+        }
+
+        Question q = session.getCurrentQuestion();
+        if (q != null) {
+            boolean isCorrect = q.isCorrect(answer);
+            if (isCorrect) {
+                player.sendMessage(ChatColor.GREEN + "正解！");
+                session.score++;
+            } else {
+                player.sendMessage(ChatColor.RED + "不正解... (正解: " + q.correctDisplay + ")");
+            }
+
+            session.currentIndex++;
+
+            // 次の問題へ（少し遅延させると親切だが、今回は即時）
+            Bukkit.getScheduler().runTask(plugin, () -> askNextQuestion(player, session));
+        }
+    }
+
+    // 内部クラス
+    private static class QuizSession {
+        UUID playerId;
+        List<Question> questions;
+        int currentIndex = 0;
+        int score = 0;
+
+        QuizSession(UUID playerId, List<Question> questions) {
+            this.playerId = playerId;
+            this.questions = questions;
+        }
+
+        Question getCurrentQuestion() {
+            if (currentIndex < questions.size()) {
+                return questions.get(currentIndex);
+            }
+            return null;
+        }
+    }
+
+    private static class Question {
+        String text;
+        String correctDisplay;
+        List<String> validAnswers;
+
+        Question(String text, String correctDisplay, List<String> validAnswers) {
+            this.text = text;
+            this.correctDisplay = correctDisplay;
+            this.validAnswers = validAnswers;
+        }
+
+        boolean isCorrect(String answer) {
+            for (String valid : validAnswers) {
+                if (valid.equalsIgnoreCase(answer))
+                    return true;
+            }
+            return false;
+        }
     }
 }
