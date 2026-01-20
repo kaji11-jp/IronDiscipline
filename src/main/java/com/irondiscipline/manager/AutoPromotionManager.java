@@ -49,6 +49,13 @@ public class AutoPromotionManager {
     }
 
     /**
+     * シャットダウン処理
+     */
+    public void shutdown() {
+        stopTask();
+    }
+
+    /**
      * 全プレイヤーの昇進判定
      */
     private void checkPromotions() {

@@ -262,16 +262,33 @@ public class StorageManager {
     /**
      * 隔離データを保存 (インベントリバックアップ付き)
      */
-    public void saveJailedPlayer(UUID playerId, String playerName, String reason,
+    public CompletableFuture<Boolean> saveJailedPlayerAsync(UUID playerId, String playerName, String reason,
             UUID jailedBy, String originalLocation,
             String inventoryBackup, String armorBackup) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        return CompletableFuture.supplyAsync(() -> {
             try {
-                String sql = """
+                String sql;
+                if ("mysql".equalsIgnoreCase(dbType)) {
+                    sql = """
+                            INSERT INTO jailed_players (player_id, player_name, reason, jailed_at, jailed_by, original_location, inventory_backup, armor_backup)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            ON DUPLICATE KEY UPDATE
+                            player_name = VALUES(player_name),
+                            reason = VALUES(reason),
+                            jailed_at = VALUES(jailed_at),
+                            jailed_by = VALUES(jailed_by),
+                            original_location = VALUES(original_location),
+                            inventory_backup = VALUES(inventory_backup),
+                            armor_backup = VALUES(armor_backup)
+                        """;
+                } else {
+                    sql = """
                             MERGE INTO jailed_players (player_id, player_name, reason, jailed_at, jailed_by, original_location, inventory_backup, armor_backup)
                             KEY (player_id)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         """;
+                }
+
                 try (PreparedStatement ps = connection.prepareStatement(sql)) {
                     ps.setString(1, playerId.toString());
                     ps.setString(2, playerName);
@@ -282,11 +299,23 @@ public class StorageManager {
                     ps.setString(7, inventoryBackup);
                     ps.setString(8, armorBackup);
                     ps.executeUpdate();
+                    return true;
                 }
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.WARNING, "隔離データ保存失敗", e);
+                return false;
             }
         });
+    }
+
+    /**
+     * @deprecated Use saveJailedPlayerAsync instead
+     */
+    @Deprecated
+    public void saveJailedPlayer(UUID playerId, String playerName, String reason,
+            UUID jailedBy, String originalLocation,
+            String inventoryBackup, String armorBackup) {
+        saveJailedPlayerAsync(playerId, playerName, reason, jailedBy, originalLocation, inventoryBackup, armorBackup);
     }
 
     /**
@@ -301,8 +330,8 @@ public class StorageManager {
     /**
      * 隔離データを削除
      */
-    public void removeJailedPlayer(UUID playerId) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+    public CompletableFuture<Void> removeJailedPlayerAsync(UUID playerId) {
+        return CompletableFuture.runAsync(() -> {
             try {
                 String sql = "DELETE FROM jailed_players WHERE player_id = ?";
                 try (PreparedStatement ps = connection.prepareStatement(sql)) {
@@ -313,6 +342,14 @@ public class StorageManager {
                 plugin.getLogger().log(Level.WARNING, "隔離データ削除失敗", e);
             }
         });
+    }
+
+    /**
+     * @deprecated Use removeJailedPlayerAsync instead
+     */
+    @Deprecated
+    public void removeJailedPlayer(UUID playerId) {
+        removeJailedPlayerAsync(playerId);
     }
 
     /**
@@ -498,12 +535,6 @@ public class StorageManager {
     public CompletableFuture<Void> removeLastWarningAsync(UUID playerId) {
         return CompletableFuture.runAsync(() -> {
             try {
-                // MySQL/H2 compatible limit delete?
-                // Using subquery to find the latest one
-                String sql = "DELETE FROM warnings WHERE id = (SELECT id FROM warnings WHERE player_id = ? ORDER BY timestamp DESC LIMIT 1)";
-                // H2/MySQL might have trouble with DELETE with subquery on same table.
-                // Alternative: Select ID first then delete.
-
                 String selectSql = "SELECT id FROM warnings WHERE player_id = ? ORDER BY timestamp DESC LIMIT 1";
                 long idToDelete = -1;
 

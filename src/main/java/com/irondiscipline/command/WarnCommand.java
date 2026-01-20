@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * /warn, /warnings, /clearwarnings コマンド
@@ -44,14 +45,29 @@ public class WarnCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
+        // メインスレッドでオンラインプレイヤー検索
         OfflinePlayer target = Bukkit.getPlayer(args[0]);
         if (target == null) {
-            // オフライン検索
-            target = Bukkit.getOfflinePlayer(args[0]);
-            if (!target.hasPlayedBefore() && !target.isOnline()) {
-                sender.sendMessage("§cプレイヤーが見つかりません (未参加の可能性)");
-                return;
-            }
+            // オフライン検索もUUID計算が速ければ同期で良いが、安全のため非同期で行うならここだけ分離
+            // しかしBukkit.getOfflinePlayer(name)はUUID解決のためにWebリクエストを飛ばす可能性があるため非同期推奨
+            // ただしBukkit.getPlayer()はメインスレッド必須
+        } else {
+            // オンラインなら即時実行
+            executeWarn(sender, target, args);
+            return;
+        }
+
+        // オフライン検索のみ非同期
+        CompletableFuture.supplyAsync(() -> Bukkit.getOfflinePlayer(args[0]))
+            .thenAccept(offlineTarget -> {
+                Bukkit.getScheduler().runTask(plugin, () -> executeWarn(sender, offlineTarget, args));
+            });
+    }
+
+    private void executeWarn(CommandSender sender, OfflinePlayer target, String[] args) {
+        if (!target.hasPlayedBefore() && !target.isOnline()) {
+            sender.sendMessage("§cプレイヤーが見つかりません (未参加の可能性)");
+            return;
         }
 
         // 権限チェック（憲兵 or 少尉以上）
@@ -68,7 +84,6 @@ public class WarnCommand implements CommandExecutor, TabCompleter {
         }
 
         String reasonStr = reason.toString();
-        OfflinePlayer finalTarget = target;
 
         // 警告追加 (非同期)
         plugin.getWarningManager().addWarning(
@@ -79,49 +94,53 @@ public class WarnCommand implements CommandExecutor, TabCompleter {
         ).thenAccept(count -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 // 通知
-                sender.sendMessage("§a" + finalTarget.getName() + " に警告を与えた（" + count + "回目）");
+                sender.sendMessage("§a" + target.getName() + " に警告を与えた（" + count + "回目）");
 
-                if (finalTarget.isOnline() && finalTarget.getPlayer() != null) {
-                    finalTarget.getPlayer().sendMessage("§c§l【警告】§r§c " + reasonStr + " §7(警告" + count + "回目)");
+                if (target.isOnline() && target.getPlayer() != null) {
+                    target.getPlayer().sendMessage("§c§l【警告】§r§c " + reasonStr + " §7(警告" + count + "回目)");
                 }
 
                 // 自動処分の通知
                 if (count >= 5) {
-                    sender.sendMessage("§c" + finalTarget.getName() + " は警告5回でキックされた");
+                    sender.sendMessage("§c" + target.getName() + " は警告5回でキックされた");
                 } else if (count >= 3) {
-                    sender.sendMessage("§e" + finalTarget.getName() + " は警告3回で隔離された");
+                    sender.sendMessage("§e" + target.getName() + " は警告3回で隔離された");
                 }
             });
         });
     }
 
     private void handleWarnings(CommandSender sender, String[] args) {
-        OfflinePlayer target;
         if (args.length > 0) {
-            target = Bukkit.getPlayer(args[0]);
-            if (target == null) {
-                target = Bukkit.getOfflinePlayer(args[0]);
-            }
-            if (!target.hasPlayedBefore() && !target.isOnline()) {
-                sender.sendMessage("§cプレイヤーが見つかりません");
-                return;
+            // オフライン検索非同期
+            OfflinePlayer onlineTarget = Bukkit.getPlayer(args[0]);
+            if (onlineTarget != null) {
+                showWarnings(sender, onlineTarget);
+            } else {
+                CompletableFuture.supplyAsync(() -> Bukkit.getOfflinePlayer(args[0]))
+                    .thenAccept(target -> Bukkit.getScheduler().runTask(plugin, () -> showWarnings(sender, target)));
             }
         } else if (sender instanceof Player) {
-            target = (Player) sender;
+            showWarnings(sender, (Player) sender);
         } else {
             sender.sendMessage("§cプレイヤーを指定してください");
+        }
+    }
+
+    private void showWarnings(CommandSender sender, OfflinePlayer target) {
+        if (!target.hasPlayedBefore() && !target.isOnline()) {
+            sender.sendMessage("§cプレイヤーが見つかりません");
             return;
         }
 
-        OfflinePlayer finalTarget = target;
         plugin.getWarningManager().getWarnings(target.getUniqueId()).thenAccept(warnings -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (warnings.isEmpty()) {
-                    sender.sendMessage("§a" + finalTarget.getName() + " には警告がありません");
+                    sender.sendMessage("§a" + target.getName() + " には警告がありません");
                     return;
                 }
 
-                sender.sendMessage("§6=== " + finalTarget.getName() + " の警告履歴 (" + warnings.size() + "件) ===");
+                sender.sendMessage("§6=== " + target.getName() + " の警告履歴 (" + warnings.size() + "件) ===");
                 int i = 1;
                 for (WarningManager.Warning w : warnings) {
                     sender.sendMessage("§7" + i + ". §f" + w.reason + " §8(" + w.getFormattedDate() + ")");
@@ -137,20 +156,24 @@ public class WarnCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        OfflinePlayer target = Bukkit.getPlayer(args[0]);
-        if (target == null) {
-            target = Bukkit.getOfflinePlayer(args[0]);
+        OfflinePlayer onlineTarget = Bukkit.getPlayer(args[0]);
+        if (onlineTarget != null) {
+            executeClearWarnings(sender, onlineTarget);
+        } else {
+            CompletableFuture.supplyAsync(() -> Bukkit.getOfflinePlayer(args[0]))
+                .thenAccept(target -> Bukkit.getScheduler().runTask(plugin, () -> executeClearWarnings(sender, target)));
         }
+    }
 
+    private void executeClearWarnings(CommandSender sender, OfflinePlayer target) {
         if (!target.hasPlayedBefore() && !target.isOnline()) {
             sender.sendMessage("§cプレイヤーが見つかりません");
             return;
         }
 
-        OfflinePlayer finalTarget = target;
         plugin.getWarningManager().clearWarnings(target.getUniqueId()).thenRun(() -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
-                sender.sendMessage("§a" + finalTarget.getName() + " の警告をすべて削除した");
+                sender.sendMessage("§a" + target.getName() + " の警告をすべて削除した");
             });
         });
     }
@@ -161,23 +184,27 @@ public class WarnCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        OfflinePlayer target = Bukkit.getPlayer(args[0]);
-        if (target == null) {
-            target = Bukkit.getOfflinePlayer(args[0]);
+        OfflinePlayer onlineTarget = Bukkit.getPlayer(args[0]);
+        if (onlineTarget != null) {
+            executeUnwarn(sender, onlineTarget);
+        } else {
+            CompletableFuture.supplyAsync(() -> Bukkit.getOfflinePlayer(args[0]))
+                .thenAccept(target -> Bukkit.getScheduler().runTask(plugin, () -> executeUnwarn(sender, target)));
         }
+    }
 
+    private void executeUnwarn(CommandSender sender, OfflinePlayer target) {
         if (!target.hasPlayedBefore() && !target.isOnline()) {
             sender.sendMessage("§cプレイヤーが見つかりません");
             return;
         }
 
-        OfflinePlayer finalTarget = target;
         plugin.getWarningManager().removeLastWarning(target.getUniqueId()).thenAccept(success -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (success) {
-                    sender.sendMessage("§a" + finalTarget.getName() + " の最新の警告を削除した");
+                    sender.sendMessage("§a" + target.getName() + " の最新の警告を削除した");
                 } else {
-                    sender.sendMessage("§c" + finalTarget.getName() + " には警告がありません");
+                    sender.sendMessage("§c" + target.getName() + " には警告がありません");
                 }
             });
         });

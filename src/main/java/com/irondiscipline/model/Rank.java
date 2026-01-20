@@ -9,7 +9,8 @@ import org.bukkit.ChatColor;
 public enum Rank {
     
     PRIVATE("PRIVATE", "&7[二等兵]", 10),
-    CORPORAL("CORPORAL", "&7[一等兵]", 20),
+    PRIVATE_FIRST_CLASS("PRIVATE_FIRST_CLASS", "&7[一等兵]", 15),
+    CORPORAL("CORPORAL", "&7[伍長]", 20),
     SERGEANT("SERGEANT", "&e[軍曹]", 30),
     LIEUTENANT("LIEUTENANT", "&6[少尉]", 40),
     CAPTAIN("CAPTAIN", "&6[大尉]", 50),
