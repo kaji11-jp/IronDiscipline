@@ -121,29 +121,32 @@ public class JailManager {
         // ゲームモード復元
         target.setGameMode(GameMode.SURVIVAL);
 
-        // インベントリ復元 (DBから)
-        String invData = plugin.getStorageManager().getInventoryBackup(targetId);
-        String armorData = plugin.getStorageManager().getArmorBackup(targetId);
+        // インベントリ復元 (DBから非同期取得)
+        plugin.getStorageManager().getInventoryBackupAsync(targetId).thenAccept(invData -> {
+            plugin.getStorageManager().getArmorBackupAsync(targetId).thenAccept(armorData -> {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (invData != null) {
+                        ItemStack[] items = InventoryUtil.fromBase64(invData);
+                        if (items != null) {
+                            target.getInventory().setContents(items);
+                        }
+                    }
 
-        if (invData != null) {
-            ItemStack[] items = InventoryUtil.fromBase64(invData);
-            if (items != null) {
-                target.getInventory().setContents(items);
-            }
-        }
+                    if (armorData != null) {
+                        ItemStack[] armor = InventoryUtil.fromBase64(armorData);
+                        if (armor != null) {
+                            target.getInventory().setArmorContents(armor);
+                        }
+                    }
 
-        if (armorData != null) {
-            ItemStack[] armor = InventoryUtil.fromBase64(armorData);
-            if (armor != null) {
-                target.getInventory().setArmorContents(armor);
-            }
-        }
+                    // DB削除
+                    plugin.getStorageManager().removeJailedPlayer(targetId);
 
-        // DB削除
-        plugin.getStorageManager().removeJailedPlayer(targetId);
-
-        // 通知
-        target.sendMessage(plugin.getConfigManager().getMessage("jail_you_released"));
+                    // 通知
+                    target.sendMessage(plugin.getConfigManager().getMessage("jail_you_released"));
+                });
+            });
+        });
 
         return true;
     }
@@ -166,48 +169,53 @@ public class JailManager {
      * ログイン時の隔離チェックと復元
      */
     public void onPlayerJoin(Player player) {
-        if (plugin.getStorageManager().isJailed(player.getUniqueId())) {
-            UUID playerId = player.getUniqueId();
+        UUID playerId = player.getUniqueId();
+
+        // 非同期チェック
+        plugin.getStorageManager().isJailedAsync(playerId).thenAccept(isJailed -> {
+            if (!isJailed) return;
 
             // DBからバックアップ状況を確認
-            String invBackup = plugin.getStorageManager().getInventoryBackup(playerId);
+            plugin.getStorageManager().getInventoryBackupAsync(playerId).thenAccept(invBackup -> {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    // バックアップがない場合（オフライン処罰時）は今すぐバックアップ
+                    if (invBackup == null) {
+                        // インベントリバックアップ
+                        String newInvBackup = InventoryUtil.toBase64(player.getInventory().getContents());
+                        String newArmorBackup = InventoryUtil.toBase64(player.getInventory().getArmorContents());
 
-            // バックアップがない場合（オフライン処罰時）は今すぐバックアップ
-            if (invBackup == null) {
-                // インベントリバックアップ
-                String newInvBackup = InventoryUtil.toBase64(player.getInventory().getContents());
-                String newArmorBackup = InventoryUtil.toBase64(player.getInventory().getArmorContents());
+                        // 元の場所保存
+                        String locString = serializeLocation(player.getLocation());
 
-                // 元の場所保存
-                String locString = serializeLocation(player.getLocation());
+                        // DB更新
+                        plugin.getStorageManager().saveJailedPlayer(playerId, player.getName(), "Offline Jail",
+                                null, locString, newInvBackup, newArmorBackup);
 
-                // DB更新
-                plugin.getStorageManager().saveJailedPlayer(playerId, player.getName(), "Offline Jail",
-                        null, locString, newInvBackup, newArmorBackup);
+                        // インベントリクリア
+                        player.getInventory().clear();
+                        player.getInventory().setArmorContents(new ItemStack[4]);
+                    }
 
-                // インベントリクリア
-                player.getInventory().clear();
-                player.getInventory().setArmorContents(new ItemStack[4]);
-            }
+                    // DBに隔離記録がある場合
+                    // キャッシュ復元
+                    if (!jailedPlayers.containsKey(playerId)) {
+                        jailedPlayers.put(playerId,
+                                new JailData(playerId, player.getName(), "再接続", System.currentTimeMillis(), null, null));
+                    }
 
-            // DBに隔離記録がある場合
-            // キャッシュ復元
-            if (!jailedPlayers.containsKey(playerId)) {
-                jailedPlayers.put(playerId,
-                        new JailData(playerId, player.getName(), "再接続", System.currentTimeMillis(), null, null));
-            }
-
-            // 隔離場所にテレポート
-            Location jailLocation = plugin.getConfigManager().getJailLocation();
-            if (jailLocation != null) {
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                    player.teleport(jailLocation);
-                    player.setGameMode(GameMode.ADVENTURE);
-                    player.sendMessage(plugin.getConfigManager().getMessage("jail_you_jailed",
-                            "%reason%", "拘留中のため再配置"));
-                }, 20L);
-            }
-        }
+                    // 隔離場所にテレポート
+                    Location jailLocation = plugin.getConfigManager().getJailLocation();
+                    if (jailLocation != null) {
+                        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                            player.teleport(jailLocation);
+                            player.setGameMode(GameMode.ADVENTURE);
+                            player.sendMessage(plugin.getConfigManager().getMessage("jail_you_jailed",
+                                    "%reason%", "拘留中のため再配置"));
+                        }, 20L);
+                    }
+                });
+            });
+        });
     }
 
     /**
