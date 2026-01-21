@@ -58,35 +58,37 @@ public class JailManager {
 
         plugin.getStorageManager().saveJailedPlayerAsync(targetId, target.getName(), reason,
                 jailer != null ? jailer.getUniqueId() : null, locString, invBackup, armorBackup)
-            .thenAccept(success -> {
-                if (success) {
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        // DB保存成功後にインベントリ操作とテレポート
-                        if (!target.isOnline()) return;
+                .thenAccept(success -> {
+                    if (success) {
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            // DB保存成功後にインベントリ操作とテレポート
+                            if (!target.isOnline())
+                                return;
 
-                        // インベントリクリア
-                        target.getInventory().clear();
-                        target.getInventory().setArmorContents(new ItemStack[4]);
+                            // インベントリクリア
+                            target.getInventory().clear();
+                            target.getInventory().setArmorContents(new ItemStack[4]);
 
-                        // ゲームモードをアドベンチャーに
-                        target.setGameMode(GameMode.ADVENTURE);
+                            // ゲームモードをアドベンチャーに
+                            target.setGameMode(GameMode.ADVENTURE);
 
-                        // 隔離場所へテレポート
-                        target.teleport(jailLocation);
+                            // 隔離場所へテレポート
+                            target.teleport(jailLocation);
 
-                        // データ保存 (キャッシュ)
-                        JailData data = new JailData(targetId, target.getName(), reason,
-                                System.currentTimeMillis(), jailer != null ? jailer.getUniqueId() : null, locString);
-                        jailedPlayers.put(targetId, data);
+                            // データ保存 (キャッシュ)
+                            JailData data = new JailData(targetId, target.getName(), reason,
+                                    System.currentTimeMillis(), jailer != null ? jailer.getUniqueId() : null,
+                                    locString);
+                            jailedPlayers.put(targetId, data);
 
-                        // 通知
-                        target.sendMessage(plugin.getConfigManager().getMessage("jail_you_jailed",
-                                "%reason%", reason != null ? reason : "理由なし"));
-                    });
-                } else {
-                    plugin.getLogger().warning("隔離処理中断: DB保存に失敗しました - " + target.getName());
-                }
-            });
+                            // 通知
+                            target.sendMessage(plugin.getConfigManager().getMessage("jail_you_jailed",
+                                    "%reason%", reason != null ? reason : "理由なし"));
+                        });
+                    } else {
+                        plugin.getLogger().warning("隔離処理中断: DB保存に失敗しました - " + target.getName());
+                    }
+                });
 
         return true; // 処理を開始したことを返す
     }
@@ -197,9 +199,9 @@ public class JailManager {
             if (!isJailed) {
                 // 隔離中でなければ元のモードに復元
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                   if (player.isOnline()) {
-                       player.setGameMode(originalMode);
-                   }
+                    if (player.isOnline()) {
+                        player.setGameMode(originalMode);
+                    }
                 });
                 return;
             }
@@ -207,7 +209,8 @@ public class JailManager {
             // DBからバックアップ状況を確認
             plugin.getStorageManager().getInventoryBackupAsync(playerId).thenAccept(invBackup -> {
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (!player.isOnline()) return;
+                    if (!player.isOnline())
+                        return;
 
                     // バックアップがない場合（オフライン処罰時）は今すぐバックアップ
                     if (invBackup == null) {
@@ -231,7 +234,8 @@ public class JailManager {
                     // キャッシュ復元
                     if (!jailedPlayers.containsKey(playerId)) {
                         jailedPlayers.put(playerId,
-                                new JailData(playerId, player.getName(), "再接続", System.currentTimeMillis(), null, null));
+                                new JailData(playerId, player.getName(), "再接続", System.currentTimeMillis(), null,
+                                        null));
                     }
 
                     // 隔離場所にテレポート
@@ -313,20 +317,10 @@ public class JailManager {
      * 隔離データ内部クラス
      */
     private static class JailData {
-        final UUID playerId;
-        final String playerName;
-        final String reason;
-        final long jailedAt;
-        final UUID jailedBy;
         final String originalLocation;
 
         JailData(UUID playerId, String playerName, String reason,
                 long jailedAt, UUID jailedBy, String originalLocation) {
-            this.playerId = playerId;
-            this.playerName = playerName;
-            this.reason = reason;
-            this.jailedAt = jailedAt;
-            this.jailedBy = jailedBy;
             this.originalLocation = originalLocation;
         }
     }

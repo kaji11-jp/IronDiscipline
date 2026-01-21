@@ -4,7 +4,6 @@ import com.irondiscipline.IronDiscipline;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.bukkit.Bukkit;
-import org.bukkit.entity.Player;
 
 import java.io.*;
 import java.security.SecureRandom;
@@ -18,16 +17,16 @@ public class LinkManager {
 
     private final IronDiscipline plugin;
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
-    
+
     // 認証コード -> Discord ID (一時的、有効期限5分)
     private final Map<String, PendingLink> pendingLinks = new ConcurrentHashMap<>();
-    
+
     // Discord ID -> Minecraft UUID
     private final Map<Long, UUID> discordToMinecraft = new ConcurrentHashMap<>();
-    
+
     // Minecraft UUID -> Discord ID
     private final Map<UUID, Long> minecraftToDiscord = new ConcurrentHashMap<>();
-    
+
     private File dataFile;
     private final SecureRandom random = new SecureRandom();
     private static final String CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -36,7 +35,7 @@ public class LinkManager {
         this.plugin = plugin;
         this.dataFile = new File(plugin.getDataFolder(), "links.json");
         loadData();
-        
+
         // 期限切れコードのクリーンアップ（1分毎）
         Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::cleanupExpiredCodes, 20 * 60, 20 * 60);
     }
@@ -47,11 +46,11 @@ public class LinkManager {
     public String generateLinkCode(long discordId) {
         // 既存のコードがあれば削除
         pendingLinks.entrySet().removeIf(e -> e.getValue().discordId == discordId);
-        
+
         // 新しいコード生成
         String code = generateRandomCode();
         pendingLinks.put(code, new PendingLink(discordId, System.currentTimeMillis() + 5 * 60 * 1000));
-        
+
         return code;
     }
 
@@ -60,32 +59,32 @@ public class LinkManager {
      */
     public LinkResult attemptLink(UUID minecraftId, String code) {
         PendingLink pending = pendingLinks.remove(code.toUpperCase());
-        
+
         if (pending == null) {
             return LinkResult.INVALID_CODE;
         }
-        
+
         if (System.currentTimeMillis() > pending.expiresAt) {
             return LinkResult.EXPIRED;
         }
-        
+
         // 既存の連携があれば解除
         Long existingDiscord = minecraftToDiscord.get(minecraftId);
         if (existingDiscord != null) {
             discordToMinecraft.remove(existingDiscord);
         }
-        
+
         UUID existingMinecraft = discordToMinecraft.get(pending.discordId);
         if (existingMinecraft != null) {
             minecraftToDiscord.remove(existingMinecraft);
         }
-        
+
         // 新しい連携
         discordToMinecraft.put(pending.discordId, minecraftId);
         minecraftToDiscord.put(minecraftId, pending.discordId);
-        
+
         saveData();
-        
+
         return LinkResult.SUCCESS;
     }
 
@@ -162,7 +161,7 @@ public class LinkManager {
                 for (Map.Entry<Long, UUID> entry : discordToMinecraft.entrySet()) {
                     data.links.put(entry.getKey().toString(), entry.getValue().toString());
                 }
-                
+
                 try (Writer writer = new FileWriter(dataFile)) {
                     gson.toJson(data, writer);
                 }
@@ -176,7 +175,7 @@ public class LinkManager {
         if (!dataFile.exists()) {
             return;
         }
-        
+
         try (Reader reader = new FileReader(dataFile)) {
             LinkData data = gson.fromJson(reader, LinkData.class);
             if (data != null && data.links != null) {
@@ -186,7 +185,8 @@ public class LinkManager {
                         UUID minecraftId = UUID.fromString(entry.getValue());
                         discordToMinecraft.put(discordId, minecraftId);
                         minecraftToDiscord.put(minecraftId, discordId);
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
                 }
             }
             plugin.getLogger().info("連携データ読み込み完了: " + minecraftToDiscord.size() + "件");
@@ -199,7 +199,7 @@ public class LinkManager {
     private static class PendingLink {
         final long discordId;
         final long expiresAt;
-        
+
         PendingLink(long discordId, long expiresAt) {
             this.discordId = discordId;
             this.expiresAt = expiresAt;

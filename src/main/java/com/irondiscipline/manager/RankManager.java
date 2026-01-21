@@ -5,7 +5,6 @@ import com.irondiscipline.model.Rank;
 import com.irondiscipline.util.TabNametagUtil;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.model.user.User;
-import net.luckperms.api.node.Node;
 import net.luckperms.api.node.types.MetaNode;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -24,7 +23,7 @@ public class RankManager {
     private final IronDiscipline plugin;
     private final LuckPerms luckPerms;
     private final String metaKey;
-    
+
     // キャッシュ - 毎チャットでのAPI呼び出しを避ける
     private final Map<UUID, Rank> rankCache = new ConcurrentHashMap<>();
 
@@ -32,12 +31,11 @@ public class RankManager {
         this.plugin = plugin;
         this.luckPerms = luckPerms;
         this.metaKey = plugin.getConfigManager().getRankMetaKey();
-        
+
         // LuckPermsのイベントリスナーでキャッシュ更新
-        luckPerms.getEventBus().subscribe(plugin, 
-            net.luckperms.api.event.user.UserDataRecalculateEvent.class,
-            event -> invalidateCache(event.getUser().getUniqueId())
-        );
+        luckPerms.getEventBus().subscribe(plugin,
+                net.luckperms.api.event.user.UserDataRecalculateEvent.class,
+                event -> invalidateCache(event.getUser().getUniqueId()));
     }
 
     /**
@@ -54,14 +52,14 @@ public class RankManager {
         if (rankCache.containsKey(playerId)) {
             return CompletableFuture.completedFuture(rankCache.get(playerId));
         }
-        
+
         return luckPerms.getUserManager().loadUser(playerId)
-            .thenApply(user -> {
-                String rankId = user.getCachedData().getMetaData().getMetaValue(metaKey);
-                Rank rank = Rank.fromId(rankId);
-                rankCache.put(playerId, rank);
-                return rank;
-            });
+                .thenApply(user -> {
+                    String rankId = user.getCachedData().getMetaData().getMetaValue(metaKey);
+                    Rank rank = Rank.fromId(rankId);
+                    rankCache.put(playerId, rank);
+                    return rank;
+                });
     }
 
     /**
@@ -84,16 +82,17 @@ public class RankManager {
             if (success) {
                 // キャッシュ更新
                 rankCache.put(player.getUniqueId(), newRank);
-                
+
                 // Tab/ネームタグ即時更新 (メインスレッドで行うことを保証)
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (!player.isOnline()) return;
+                    if (!player.isOnline())
+                        return;
 
                     TabNametagUtil.updatePlayer(player, newRank);
-                    
+
                     // 本人に通知
                     player.sendMessage(plugin.getConfigManager().getMessage("rank_changed_self",
-                        "%rank%", newRank.getDisplay()));
+                            "%rank%", newRank.getDisplay()));
                 });
             }
             return success;
@@ -107,20 +106,18 @@ public class RankManager {
         return luckPerms.getUserManager().loadUser(playerId).thenApply(user -> {
             try {
                 // 既存のメタノードを削除
-                user.data().clear(node -> 
-                    node instanceof MetaNode && ((MetaNode) node).getMetaKey().equals(metaKey)
-                );
-                
+                user.data().clear(node -> node instanceof MetaNode && ((MetaNode) node).getMetaKey().equals(metaKey));
+
                 // 新しいメタノードを追加
                 MetaNode node = MetaNode.builder(metaKey, newRank.getId()).build();
                 user.data().add(node);
-                
+
                 // 保存
                 luckPerms.getUserManager().saveUser(user);
-                
+
                 // キャッシュ更新
                 rankCache.put(playerId, newRank);
-                
+
                 return true;
             } catch (Exception e) {
                 plugin.getLogger().warning("階級設定失敗: " + e.getMessage());
@@ -135,11 +132,11 @@ public class RankManager {
     public CompletableFuture<Rank> promote(Player player) {
         Rank current = getRank(player);
         Rank next = current.getNextRank();
-        
+
         if (next == null) {
             return CompletableFuture.completedFuture(null); // 最高階級
         }
-        
+
         return setRank(player, next).thenApply(success -> success ? next : null);
     }
 
@@ -149,11 +146,11 @@ public class RankManager {
     public CompletableFuture<Rank> demote(Player player) {
         Rank current = getRank(player);
         Rank prev = current.getPreviousRank();
-        
+
         if (prev == null) {
             return CompletableFuture.completedFuture(null); // 最低階級
         }
-        
+
         return setRank(player, prev).thenApply(success -> success ? prev : null);
     }
 
@@ -177,7 +174,7 @@ public class RankManager {
      */
     public void invalidateCache(UUID playerId) {
         rankCache.remove(playerId);
-        
+
         // オンラインならTab更新
         Player player = Bukkit.getPlayer(playerId);
         if (player != null && player.isOnline()) {

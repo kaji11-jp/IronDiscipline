@@ -97,8 +97,7 @@ warnings:
     jail: 3
     kick: 5
 
-    jail: 3
-    kick: 5
+ 
 
 # 昇進システム設定
 promotion:

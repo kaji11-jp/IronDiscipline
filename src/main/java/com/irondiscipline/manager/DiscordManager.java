@@ -1026,9 +1026,8 @@ public class DiscordManager extends ListenerAdapter {
                     target.kickPlayer(ChatColor.RED + "Kicked by Discord Admin\nReason: " + reason);
                 }
             } else if (type.equals("ban")) {
-                // Deprecated method usage - acceptable for now for compatibility
                 @SuppressWarnings("deprecation")
-                org.bukkit.BanList banList = Bukkit.getBanList(org.bukkit.BanList.Type.NAME);
+                org.bukkit.BanList<?> banList = Bukkit.getBanList(org.bukkit.BanList.Type.NAME);
                 if (banList != null) {
                     banList.addBan(Bukkit.getOfflinePlayer(targetUUID).getName(), reason, (java.util.Date) null,
                             "Console(Discord)");

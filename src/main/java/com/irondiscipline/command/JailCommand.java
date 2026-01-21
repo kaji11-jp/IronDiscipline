@@ -39,12 +39,6 @@ public class JailCommand implements CommandExecutor, TabCompleter {
         String targetName = args[0];
         Player target = Bukkit.getPlayer(targetName);
 
-        if (target == null) {
-            sender.sendMessage(plugin.getConfigManager().getMessage("player_not_found",
-                    "%player%", targetName));
-            return true;
-        }
-
         // 隔離場所チェック
         if (plugin.getConfigManager().getJailLocation() == null) {
             sender.sendMessage(plugin.getConfigManager().getMessage("jail_not_set"));
@@ -73,7 +67,8 @@ public class JailCommand implements CommandExecutor, TabCompleter {
             // オフラインプレイヤー
             org.bukkit.OfflinePlayer offlineTarget = Bukkit.getOfflinePlayer(targetName);
             if (!offlineTarget.hasPlayedBefore() && !offlineTarget.isOnline()) {
-                sender.sendMessage("§cプレイヤーが見つかりません (未参加の可能性)");
+                sender.sendMessage(plugin.getConfigManager().getMessage("player_not_found",
+                        "%player%", targetName));
                 return true;
             }
             success = plugin.getJailManager().jailOffline(offlineTarget.getUniqueId(), offlineTarget.getName(),

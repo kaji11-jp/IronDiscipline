@@ -19,13 +19,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PTSManager {
 
     private final IronDiscipline plugin;
-    
+
     // 発言許可状態 (UUID -> 期限タイムスタンプ)
     private final Map<UUID, Long> grantedPlayers = new ConcurrentHashMap<>();
-    
+
     // PTS要請中のプレイヤー
     private final Set<UUID> requestingPlayers = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    
+
     // 期限切れチェック用タスク
     private BukkitTask expirationTask;
 
@@ -42,12 +42,12 @@ public class PTSManager {
         if (player.hasPermission("iron.pts.bypass")) {
             return true;
         }
-        
+
         // 階級がPTS必要ラインを超えている場合
         if (!plugin.getRankManager().requiresPTS(player)) {
             return true;
         }
-        
+
         // 一時的な発言許可があるかチェック
         Long expiration = grantedPlayers.get(player.getUniqueId());
         if (expiration != null) {
@@ -58,7 +58,7 @@ public class PTSManager {
                 revokeGrant(player);
             }
         }
-        
+
         return false;
     }
 
@@ -69,11 +69,11 @@ public class PTSManager {
         long expiration = System.currentTimeMillis() + (seconds * 1000L);
         grantedPlayers.put(player.getUniqueId(), expiration);
         requestingPlayers.remove(player.getUniqueId());
-        
+
         // 本人に通知
         player.sendMessage(plugin.getConfigManager().getMessage("pts_received",
-            "%seconds%", String.valueOf(seconds)));
-        
+                "%seconds%", String.valueOf(seconds)));
+
         // アクションバーで残り時間表示開始
         startCountdownDisplay(player, seconds);
     }
@@ -94,19 +94,19 @@ public class PTSManager {
         if (requestingPlayers.contains(player.getUniqueId())) {
             return; // 既にリクエスト中
         }
-        
+
         requestingPlayers.add(player.getUniqueId());
-        
+
         // 本人に確認メッセージ
         player.sendMessage(plugin.getConfigManager().getMessage("pts_request_sent"));
-        
+
         // 上官に通知
         notifyOfficers(player);
-        
+
         // アクションバーで要請中表示
         player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
-            TextComponent.fromLegacyText(ChatColor.YELLOW + "✋ PTS要請中..."));
-        
+                TextComponent.fromLegacyText(ChatColor.YELLOW + "✋ PTS要請中..."));
+
         // 30秒後に自動キャンセル
         final UUID playerId = player.getUniqueId();
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -115,7 +115,7 @@ public class PTSManager {
                 if (p != null && p.isOnline()) {
                     p.sendMessage(plugin.getConfigManager().getMessage("pts_request_timeout"));
                     p.spigot().sendMessage(ChatMessageType.ACTION_BAR,
-                        TextComponent.fromLegacyText(ChatColor.RED + "⏱ PTS要請がタイムアウトしました"));
+                            TextComponent.fromLegacyText(ChatColor.RED + "⏱ PTS要請がタイムアウトしました"));
                 }
             }
         }, 20L * 30); // 30秒 = 600 tick
@@ -126,22 +126,23 @@ public class PTSManager {
      */
     public void notifyOfficers(Player requester) {
         String message = plugin.getConfigManager().getMessage("pts_request_notify",
-            "%player%", requester.getName());
-        
+                "%player%", requester.getName());
+
         int threshold = plugin.getConfigManager().getPTSRequireBelowWeight();
-        
+
         for (Player officer : Bukkit.getOnlinePlayers()) {
             // 自分自身はスキップ
-            if (officer.equals(requester)) continue;
-            
+            if (officer.equals(requester))
+                continue;
+
             // PTS付与権限を持っているか、閾値より上の階級
-            if (officer.hasPermission("iron.pts.grant") || 
-                plugin.getRankManager().getRank(officer).getWeight() > threshold) {
+            if (officer.hasPermission("iron.pts.grant") ||
+                    plugin.getRankManager().getRank(officer).getWeight() > threshold) {
                 officer.sendMessage(message);
-                
+
                 // サウンド通知
-                officer.playSound(officer.getLocation(), 
-                    org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.5f);
+                officer.playSound(officer.getLocation(),
+                        org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.5f);
             }
         }
     }
@@ -152,16 +153,17 @@ public class PTSManager {
     public void notifyOfficersWithMessage(Player requester, String chatMessage) {
         int threshold = plugin.getConfigManager().getPTSRequireBelowWeight();
         Rank requesterRank = plugin.getRankManager().getRank(requester);
-        
-        String formattedMessage = ChatColor.GRAY + "[PTS要請] " + 
-            requesterRank.getDisplay() + " " + requester.getName() + 
-            ChatColor.GRAY + ": " + ChatColor.WHITE + chatMessage;
-        
+
+        String formattedMessage = plugin.getConfigManager().getPTSRequestPrefix() + " " +
+                requesterRank.getDisplay() + " " + requester.getName() +
+                ChatColor.GRAY + ": " + ChatColor.WHITE + chatMessage;
+
         for (Player officer : Bukkit.getOnlinePlayers()) {
-            if (officer.equals(requester)) continue;
-            
-            if (officer.hasPermission("iron.pts.grant") || 
-                plugin.getRankManager().getRank(officer).getWeight() > threshold) {
+            if (officer.equals(requester))
+                continue;
+
+            if (officer.hasPermission("iron.pts.grant") ||
+                    plugin.getRankManager().getRank(officer).getWeight() > threshold) {
                 officer.sendMessage(formattedMessage);
             }
         }
@@ -179,9 +181,10 @@ public class PTSManager {
      */
     public int getRemainingSeconds(UUID playerId) {
         Long expiration = grantedPlayers.get(playerId);
-        if (expiration == null) return 0;
+        if (expiration == null)
+            return 0;
         long remaining = expiration - System.currentTimeMillis();
-        return remaining > 0 ? (int)(remaining / 1000) : 0;
+        return remaining > 0 ? (int) (remaining / 1000) : 0;
     }
 
     /**
@@ -189,22 +192,22 @@ public class PTSManager {
      */
     private void startCountdownDisplay(Player player, int totalSeconds) {
         final UUID playerId = player.getUniqueId();
-        
+
         Bukkit.getScheduler().runTaskTimer(plugin, task -> {
             Player p = Bukkit.getPlayer(playerId);
             if (p == null || !p.isOnline()) {
                 task.cancel();
                 return;
             }
-            
+
             int remaining = getRemainingSeconds(playerId);
             if (remaining <= 0) {
                 p.spigot().sendMessage(ChatMessageType.ACTION_BAR,
-                    TextComponent.fromLegacyText(ChatColor.RED + "⏱ 発言許可失効"));
+                        TextComponent.fromLegacyText(ChatColor.RED + "⏱ 発言許可失効"));
                 task.cancel();
                 return;
             }
-            
+
             // 色分け
             ChatColor color;
             if (remaining > 30) {
@@ -214,10 +217,10 @@ public class PTSManager {
             } else {
                 color = ChatColor.RED;
             }
-            
+
             p.spigot().sendMessage(ChatMessageType.ACTION_BAR,
-                TextComponent.fromLegacyText(color + "🎤 発言許可: " + remaining + "秒"));
-            
+                    TextComponent.fromLegacyText(color + "🎤 発言許可: " + remaining + "秒"));
+
         }, 0L, 20L); // 毎秒更新
     }
 

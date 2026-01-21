@@ -3,12 +3,10 @@ package com.irondiscipline.manager;
 import com.irondiscipline.IronDiscipline;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.io.*;
-import java.lang.reflect.Type;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -20,34 +18,34 @@ public class DivisionManager {
 
     private final IronDiscipline plugin;
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
-    
+
     // プレイヤー -> 部隊
     private final Map<UUID, String> playerDivisions = new ConcurrentHashMap<>();
-    
+
     // 部隊一覧
     private final Set<String> divisions = ConcurrentHashMap.newKeySet();
-    
+
     // 憲兵部隊のID
     private static final String MP_DIVISION = "mp";
-    
+
     private File dataFile;
 
     public DivisionManager(IronDiscipline plugin) {
         this.plugin = plugin;
         this.dataFile = new File(plugin.getDataFolder(), "divisions.json");
         loadData();
-        
+
         // デフォルト部隊を追加
         initDefaultDivisions();
     }
 
     private void initDefaultDivisions() {
-        divisions.add("mp");       // 憲兵 (Military Police)
+        divisions.add("mp"); // 憲兵 (Military Police)
         divisions.add("infantry"); // 歩兵
         divisions.add("artillery");// 砲兵
         divisions.add("aviation"); // 航空
-        divisions.add("medical");  // 衛生
-        divisions.add("command");  // 司令部
+        divisions.add("medical"); // 衛生
+        divisions.add("command"); // 司令部
     }
 
     /**
@@ -80,7 +78,8 @@ public class DivisionManager {
      */
     public String getDivisionDisplay(UUID playerId) {
         String div = playerDivisions.get(playerId);
-        if (div == null) return null;
+        if (div == null)
+            return null;
         return getDivisionDisplayName(div);
     }
 
@@ -158,7 +157,7 @@ public class DivisionManager {
                 for (Map.Entry<UUID, String> entry : playerDivisions.entrySet()) {
                     data.players.put(entry.getKey().toString(), entry.getValue());
                 }
-                
+
                 try (Writer writer = new FileWriter(dataFile)) {
                     gson.toJson(data, writer);
                 }
@@ -175,7 +174,7 @@ public class DivisionManager {
         if (!dataFile.exists()) {
             return;
         }
-        
+
         try (Reader reader = new FileReader(dataFile)) {
             DivisionData data = gson.fromJson(reader, DivisionData.class);
             if (data != null) {
@@ -187,7 +186,8 @@ public class DivisionManager {
                         try {
                             UUID uuid = UUID.fromString(entry.getKey());
                             playerDivisions.put(uuid, entry.getValue());
-                        } catch (IllegalArgumentException ignored) {}
+                        } catch (IllegalArgumentException ignored) {
+                        }
                     }
                 }
             }

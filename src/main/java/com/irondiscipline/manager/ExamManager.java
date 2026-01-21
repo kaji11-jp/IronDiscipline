@@ -1,16 +1,12 @@
 package com.irondiscipline.manager;
 
 import com.irondiscipline.IronDiscipline;
-import com.irondiscipline.model.Rank;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
-import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.bukkit.scheduler.BukkitTask;
-import org.bukkit.util.Vector;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -214,13 +210,11 @@ public class ExamManager implements Listener {
 
     // 内部クラス
     private static class QuizSession {
-        UUID playerId;
         List<Question> questions;
         int currentIndex = 0;
         int score = 0;
 
         QuizSession(UUID playerId, List<Question> questions) {
-            this.playerId = playerId;
             this.questions = questions;
         }
 
