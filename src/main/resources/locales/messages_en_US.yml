@@ -1,0 +1,44 @@
+prefix: "&8[&cIronDiscipline&8] "
+
+# Rank related
+rank_promoted: "&aPromoted %player% to &f%rank%&a."
+rank_demoted: "&eDemoted %player% to &f%rank%&e."
+rank_changed_self: "&aYour rank has been changed to &f%rank%&a."
+rank_already_max: "&cCannot promote any further."
+rank_already_min: "&cCannot demote any further."
+
+# PTS related
+pts_granted: "&aGranted permission to speak to %player% for &f%seconds% seconds&a."
+pts_received: "&aYou have been granted permission to speak. Remaining: &f%seconds% seconds&a."
+pts_expired: "&ePermission to speak has expired."
+pts_required: "&cYou need permission from a superior to speak. Double sneak to request PTS."
+pts_request_sent: "&ePTS request sent. Wait for superior's permission."
+pts_request_notify: "&e%player% is requesting permission to speak. &7/grant %player%"
+pts_request_timeout: "&cPTS request timed out. Please request again."
+
+# Radio related
+radio_joined: "&aJoined radio frequency &f%freq%&a."
+radio_left: "&eLeft the radio."
+radio_usage: "&cUsage: /radio <frequency> or /radio off"
+
+# Jail related
+jail_sent: "&cJailed %player%. Reason: %reason%"
+jail_released: "&aReleased %player%."
+jail_you_jailed: "&cYou have been jailed. Reason: %reason%"
+jail_you_released: "&aYou have been released. Return to duty."
+jail_not_set: "&cJail location is not set. Use /setjail."
+jail_location_set: "&aJail location set."
+
+# General
+player_not_found: "&cPlayer not found: %player%"
+no_permission: "&cYou do not have permission."
+config_reloaded: "&aConfiguration reloaded."
+
+# Rank restrictions
+rank_insufficient: "&cRank of Second Lieutenant or higher is required. Required: {required}"
+rank_cannot_operate: "&cYou do not have permission to operate on {target} ({target_rank}). You can only operate on ranks lower than yours."
+
+# Configurable strings
+pts_request_prefix: "&8[&ePTS Request&8]"
+radio_format: "&8[&bRadio %freq%&8] &7%rank% %player%&8: &f%message%"
+jail_blocked_message: "&cYou are detained. You are not permitted to speak."

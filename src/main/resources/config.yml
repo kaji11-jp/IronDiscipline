@@ -6,7 +6,8 @@
 general:
   # デバッグモード
   debug: false
-  # 日本語メッセージを使用
+  # 使用する言語 (locales/messages_LANGUAGE.yml が読み込まれます)
+  # 利用可能: ja_JP, en_US
   locale: ja_JP
 
 # データベース設定
@@ -63,15 +64,11 @@ pts:
     enabled: true
     # ダブルスニーク判定時間 (ミリ秒)
     double_sneak_threshold: 500
-  # PTSリクエスト時のプレフィックス
-  request_prefix: "&8[&ePTS要請&8]"
 
 # 無線システム設定
 radio:
   # デフォルト周波数
   default_frequency: "118.0"
-  # 無線メッセージのフォーマット
-  format: "&8[&b無線 %freq%&8] &7%rank% %player%&8: &f%message%"
 
 # 隔離システム設定
 jail:
@@ -81,8 +78,6 @@ jail:
     x: 0
     y: 64
     z: 0
-  # 隔離中のメッセージ
-  blocked_message: "&c貴官は拘留中だ。発言は許可されていない。"
 
 # 戦闘ログ設定
 killlog:
@@ -96,8 +91,6 @@ warnings:
   thresholds:
     jail: 3
     kick: 5
-
- 
 
 # 昇進システム設定
 promotion:
@@ -116,48 +109,6 @@ promotion:
   # 試験設定
   exam:
     quiz_timeout: 45 # クイズの回答制限時間 (秒)
-
-# メッセージ設定
-messages:
-  prefix: "&8[&c鉄の規律&8] "
-  
-  # 階級関連
-  rank_promoted: "&a%player% を &f%rank% &aに昇進させた。"
-  rank_demoted: "&e%player% を &f%rank% &eに降格させた。"
-  rank_changed_self: "&aあなたの階級が &f%rank% &aに変更された。"
-  rank_already_max: "&cこれ以上昇進できない。"
-  rank_already_min: "&cこれ以上降格できない。"
-  
-  # PTS関連
-  pts_granted: "&a%player% に &f%seconds%秒 &aの発言権を付与した。"
-  pts_received: "&a発言許可を受けた。残り &f%seconds%秒&a。"
-  pts_expired: "&e発言許可が失効した。"
-  pts_required: "&c発言には上官の許可が必要だ。スニーク2回でPTS要請。"
-  pts_request_sent: "&ePTS要請を送信した。上官の許可を待て。"
-  pts_request_notify: "&e%player% が発言許可を求めている。 &7/grant %player%"
-  pts_request_timeout: "&c発言許可が得られなかった。再度要請してください。"
-  
-  # 無線関連
-  radio_joined: "&a無線周波数 &f%freq% &aに参加した。"
-  radio_left: "&e無線から離脱した。"
-  radio_usage: "&c使用法: /radio <周波数> または /radio off"
-  
-  # 隔離関連
-  jail_sent: "&c%player% を拘留した。理由: %reason%"
-  jail_released: "&a%player% を釈放した。"
-  jail_you_jailed: "&c貴官は拘留された。理由: %reason%"
-  jail_you_released: "&a釈放された。任務に戻れ。"
-  jail_not_set: "&c隔離場所が設定されていない。/setjail を実行せよ。"
-  jail_location_set: "&a隔離場所を設定した。"
-  
-  # 一般
-  player_not_found: "&cプレイヤーが見つからない: %player%"
-  no_permission: "&c権限がない。"
-  config_reloaded: "&a設定をリロードした。"
-  
-  # 階級制限
-  rank_insufficient: "&c少尉以上の階級が必要だ。必要階級: {required}"
-  rank_cannot_operate: "&c{target}（{target_rank}）を操作する権限がない。自分より下位の階級のみ操作可能。"
 
 # Discord連携設定
 discord:
