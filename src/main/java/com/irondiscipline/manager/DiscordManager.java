@@ -218,43 +218,47 @@ public class DiscordManager extends ListenerAdapter {
     }
 
     private void handleStatus(SlashCommandInteractionEvent event) {
-        int online = Bukkit.getOnlinePlayers().size();
-        int max = Bukkit.getMaxPlayers();
-        int linked = plugin.getLinkManager().getLinkCount();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            int online = Bukkit.getOnlinePlayers().size();
+            int max = Bukkit.getMaxPlayers();
+            int linked = plugin.getLinkManager().getLinkCount();
 
-        EmbedBuilder eb = new EmbedBuilder()
-                .setTitle("📊 サーバー状態")
-                .addField("オンライン", online + " / " + max, true)
-                .addField("連携済み", linked + "人", true)
-                .setColor(Color.GREEN)
-                .setFooter("鉄の規律");
+            EmbedBuilder eb = new EmbedBuilder()
+                    .setTitle("📊 サーバー状態")
+                    .addField("オンライン", online + " / " + max, true)
+                    .addField("連携済み", linked + "人", true)
+                    .setColor(Color.GREEN)
+                    .setFooter("鉄の規律");
 
-        event.replyEmbeds(eb.build()).queue();
+            event.replyEmbeds(eb.build()).queue();
+        });
     }
 
     private void handlePlayers(SlashCommandInteractionEvent event) {
-        StringBuilder sb = new StringBuilder();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            StringBuilder sb = new StringBuilder();
 
-        for (Player p : Bukkit.getOnlinePlayers()) {
-            Rank rank = plugin.getRankManager().getRank(p);
-            String div = plugin.getDivisionManager().getDivision(p.getUniqueId());
-            String divDisplay = div != null ? plugin.getDivisionManager().getDivisionDisplayName(div) : "";
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                Rank rank = plugin.getRankManager().getRank(p);
+                String div = plugin.getDivisionManager().getDivision(p.getUniqueId());
+                String divDisplay = div != null ? plugin.getDivisionManager().getDivisionDisplayName(div) : "";
 
-            sb.append("**").append(p.getName()).append("** - ")
-                    .append(rank.getId()).append(" ").append(divDisplay).append("\n");
-        }
+                sb.append("**").append(p.getName()).append("** - ")
+                        .append(rank.getId()).append(" ").append(divDisplay).append("\n");
+            }
 
-        if (sb.length() == 0) {
-            sb.append("オンラインプレイヤーなし");
-        }
+            if (sb.length() == 0) {
+                sb.append("オンラインプレイヤーなし");
+            }
 
-        EmbedBuilder eb = new EmbedBuilder()
-                .setTitle("👥 オンラインプレイヤー")
-                .setDescription(sb.toString())
-                .setColor(Color.CYAN)
-                .setFooter("鉄の規律");
+            EmbedBuilder eb = new EmbedBuilder()
+                    .setTitle("👥 オンラインプレイヤー")
+                    .setDescription(sb.toString())
+                    .setColor(Color.CYAN)
+                    .setFooter("鉄の規律");
 
-        event.replyEmbeds(eb.build()).queue();
+            event.replyEmbeds(eb.build()).queue();
+        });
     }
 
     private void handlePlaytime(SlashCommandInteractionEvent event) {
@@ -287,18 +291,20 @@ public class DiscordManager extends ListenerAdapter {
             return;
         }
 
-        Player player = Bukkit.getPlayer(minecraftId);
-        Rank rank = player != null ? plugin.getRankManager().getRank(player) : Rank.PRIVATE;
-        String div = plugin.getDivisionManager().getDivision(minecraftId);
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Player player = Bukkit.getPlayer(minecraftId);
+            Rank rank = player != null ? plugin.getRankManager().getRank(player) : Rank.PRIVATE;
+            String div = plugin.getDivisionManager().getDivision(minecraftId);
 
-        EmbedBuilder eb = new EmbedBuilder()
-                .setTitle("🎖️ 階級情報")
-                .addField("階級", rank.getId(), true)
-                .addField("部隊", div != null ? div : "なし", true)
-                .setColor(Color.YELLOW)
-                .setFooter("鉄の規律");
+            EmbedBuilder eb = new EmbedBuilder()
+                    .setTitle("🎖️ 階級情報")
+                    .addField("階級", rank.getId(), true)
+                    .addField("部隊", div != null ? div : "なし", true)
+                    .setColor(Color.YELLOW)
+                    .setFooter("鉄の規律");
 
-        event.replyEmbeds(eb.build()).setEphemeral(true).queue();
+            event.replyEmbeds(eb.build()).setEphemeral(true).queue();
+        });
     }
 
     private void handleWarn(SlashCommandInteractionEvent event) {
@@ -319,20 +325,22 @@ public class DiscordManager extends ListenerAdapter {
             return;
         }
 
-        Player target = Bukkit.getPlayer(targetMinecraft);
-        if (target == null || !target.isOnline()) {
-            event.reply("対象プレイヤーはオフラインです。").setEphemeral(true).queue();
-            return;
-        }
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Player target = Bukkit.getPlayer(targetMinecraft);
+            if (target == null || !target.isOnline()) {
+                event.reply("対象プレイヤーはオフラインです。").setEphemeral(true).queue();
+                return;
+            }
 
-        // 警告実行
-        plugin.getWarningManager().addWarning(targetMinecraft, target.getName(), reason, null).thenAccept(count -> {
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                target.sendMessage("§c§l【警告】§r§c " + reason + " §7(警告" + count + "回目)");
+            // 警告実行
+            plugin.getWarningManager().addWarning(targetMinecraft, target.getName(), reason, null).thenAccept(count -> {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    target.sendMessage("§c§l【警告】§r§c " + reason + " §7(警告" + count + "回目)");
+                });
             });
-        });
 
-        event.reply("✅ " + target.getName() + " に警告を与えました。理由: " + reason).queue();
+            event.reply("✅ " + target.getName() + " に警告を与えました。理由: " + reason).queue();
+        });
     }
 
     private void handleAnnounce(SlashCommandInteractionEvent event) {
