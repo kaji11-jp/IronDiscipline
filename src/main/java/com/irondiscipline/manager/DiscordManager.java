@@ -266,16 +266,21 @@ public class DiscordManager extends ListenerAdapter {
             return;
         }
 
-        String playtime = plugin.getPlaytimeManager().getFormattedPlaytime(minecraftId);
-        String playerName = Bukkit.getOfflinePlayer(minecraftId).getName();
+        // Defer reply to prevent timeout and indicate processing
+        event.deferReply(true).queue();
 
-        EmbedBuilder eb = new EmbedBuilder()
-                .setTitle("⏱️ 勤務時間")
-                .addField(playerName != null ? playerName : "Unknown", playtime, false)
-                .setColor(Color.ORANGE)
-                .setFooter("鉄の規律");
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            String playtime = plugin.getPlaytimeManager().getFormattedPlaytime(minecraftId);
+            String playerName = Bukkit.getOfflinePlayer(minecraftId).getName();
 
-        event.replyEmbeds(eb.build()).setEphemeral(true).queue();
+            EmbedBuilder eb = new EmbedBuilder()
+                    .setTitle("⏱️ 勤務時間")
+                    .addField(playerName != null ? playerName : "Unknown", playtime, false)
+                    .setColor(Color.ORANGE)
+                    .setFooter("鉄の規律");
+
+            event.getHook().editOriginalEmbeds(eb.build()).queue();
+        });
     }
 
     private void handleRank(SlashCommandInteractionEvent event) {
