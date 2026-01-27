@@ -47,8 +47,9 @@ echo "LuckPerms をダウンロード中..."
 LUCKPERMS_URL="https://download.luckperms.net/1552/bukkit/loader/LuckPerms-Bukkit-5.4.145.jar"
 curl -o plugins/LuckPerms.jar -L "$LUCKPERMS_URL"
 
-# TODO: IronDiscipline.jar をGCSからダウンロード
-# gsutil cp gs://YOUR_BUCKET/IronDiscipline-1.0.0.jar plugins/
+# IronDiscipline.jar をGCSからダウンロード (See docs/GCP_DEPLOY.md)
+echo "IronDiscipline をダウンロード中..."
+gsutil cp gs://irondiscipline-server/IronDiscipline-latest.jar plugins/
 
 # 権限設定
 chown -R minecraft:minecraft /opt/minecraft
