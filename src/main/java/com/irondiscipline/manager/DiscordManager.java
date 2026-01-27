@@ -287,18 +287,23 @@ public class DiscordManager extends ListenerAdapter {
             return;
         }
 
-        Player player = Bukkit.getPlayer(minecraftId);
-        Rank rank = player != null ? plugin.getRankManager().getRank(player) : Rank.PRIVATE;
-        String div = plugin.getDivisionManager().getDivision(minecraftId);
+        // Async lookup - safe and non-blocking
+        plugin.getRankManager().getRankAsync(minecraftId).thenAccept(rank -> {
+            String div = plugin.getDivisionManager().getDivision(minecraftId);
 
-        EmbedBuilder eb = new EmbedBuilder()
-                .setTitle("🎖️ 階級情報")
-                .addField("階級", rank.getId(), true)
-                .addField("部隊", div != null ? div : "なし", true)
-                .setColor(Color.YELLOW)
-                .setFooter("鉄の規律");
+            EmbedBuilder eb = new EmbedBuilder()
+                    .setTitle("🎖️ 階級情報")
+                    .addField("階級", rank.getId(), true)
+                    .addField("部隊", div != null ? div : "なし", true)
+                    .setColor(Color.YELLOW)
+                    .setFooter("鉄の規律");
 
-        event.replyEmbeds(eb.build()).setEphemeral(true).queue();
+            event.replyEmbeds(eb.build()).setEphemeral(true).queue();
+        }).exceptionally(e -> {
+            plugin.getLogger().warning("Failed to load rank for " + minecraftId + ": " + e.getMessage());
+            event.reply("階級情報の取得に失敗しました。").setEphemeral(true).queue();
+            return null;
+        });
     }
 
     private void handleWarn(SlashCommandInteractionEvent event) {
