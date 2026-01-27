@@ -358,7 +358,18 @@ public class StorageManager {
      */
     @Deprecated
     public String getOriginalLocation(UUID playerId) {
+        if (isPrimaryThread()) {
+            plugin.getLogger().warning("Blocking database call on main thread: getOriginalLocation. Use getOriginalLocationAsync instead.");
+        }
         return getOriginalLocationAsync(playerId).join();
+    }
+
+    protected boolean isPrimaryThread() {
+        try {
+            return Bukkit.isPrimaryThread();
+        } catch (Exception e) {
+            return false; // For testing context where Bukkit is not mocked
+        }
     }
 
     /**
