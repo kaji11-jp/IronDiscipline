@@ -208,44 +208,50 @@ public class JailManager {
 
             // DBからバックアップ状況を確認
             plugin.getStorageManager().getInventoryBackupAsync(playerId).thenAccept(invBackup -> {
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (!player.isOnline())
-                        return;
+                // 元座標も非同期で取得
+                plugin.getStorageManager().getOriginalLocationAsync(playerId).thenAccept(savedOriginalLoc -> {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        if (!player.isOnline())
+                            return;
 
-                    // バックアップがない場合（オフライン処罰時）は今すぐバックアップ
-                    if (invBackup == null) {
-                        // インベントリバックアップ
-                        String newInvBackup = InventoryUtil.toBase64(player.getInventory().getContents());
-                        String newArmorBackup = InventoryUtil.toBase64(player.getInventory().getArmorContents());
+                        String finalOriginalLoc = savedOriginalLoc;
 
-                        // 元の場所保存
-                        String locString = serializeLocation(player.getLocation());
+                        // バックアップがない場合（オフライン処罰時）は今すぐバックアップ
+                        if (invBackup == null) {
+                            // インベントリバックアップ
+                            String newInvBackup = InventoryUtil.toBase64(player.getInventory().getContents());
+                            String newArmorBackup = InventoryUtil.toBase64(player.getInventory().getArmorContents());
 
-                        // DB更新
-                        plugin.getStorageManager().saveJailedPlayer(playerId, player.getName(), "Offline Jail",
-                                null, locString, newInvBackup, newArmorBackup);
+                            // 元の場所保存
+                            String locString = serializeLocation(player.getLocation());
+                            finalOriginalLoc = locString;
 
-                        // インベントリクリア
-                        player.getInventory().clear();
-                        player.getInventory().setArmorContents(new ItemStack[4]);
-                    }
+                            // DB更新
+                            plugin.getStorageManager().saveJailedPlayer(playerId, player.getName(), "Offline Jail",
+                                    null, locString, newInvBackup, newArmorBackup);
 
-                    // DBに隔離記録がある場合
-                    // キャッシュ復元
-                    if (!jailedPlayers.containsKey(playerId)) {
-                        jailedPlayers.put(playerId,
-                                new JailData(playerId, player.getName(), "再接続", System.currentTimeMillis(), null,
-                                        null));
-                    }
+                            // インベントリクリア
+                            player.getInventory().clear();
+                            player.getInventory().setArmorContents(new ItemStack[4]);
+                        }
 
-                    // 隔離場所にテレポート
-                    Location jailLocation = plugin.getConfigManager().getJailLocation();
-                    if (jailLocation != null) {
-                        player.teleport(jailLocation);
-                        player.setGameMode(GameMode.ADVENTURE);
-                        player.sendMessage(plugin.getConfigManager().getMessage("jail_you_jailed",
-                                "%reason%", "拘留中のため再配置"));
-                    }
+                        // DBに隔離記録がある場合
+                        // キャッシュ復元
+                        if (!jailedPlayers.containsKey(playerId)) {
+                            jailedPlayers.put(playerId,
+                                    new JailData(playerId, player.getName(), "再接続", System.currentTimeMillis(), null,
+                                            finalOriginalLoc));
+                        }
+
+                        // 隔離場所にテレポート
+                        Location jailLocation = plugin.getConfigManager().getJailLocation();
+                        if (jailLocation != null) {
+                            player.teleport(jailLocation);
+                            player.setGameMode(GameMode.ADVENTURE);
+                            player.sendMessage(plugin.getConfigManager().getMessage("jail_you_jailed",
+                                    "%reason%", "拘留中のため再配置"));
+                        }
+                    });
                 });
             });
         });
